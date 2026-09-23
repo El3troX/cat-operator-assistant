@@ -56,11 +56,11 @@ def seed_database(reset: bool = True):
 
         # 1. Seed operation_log from machine_operations_log.csv
         csv_ops_path = PROJECT_ROOT / "data" / "machine_operations_log.csv"
+        ops_records = []
         if not csv_ops_path.exists():
             print(f"Warning: CSV file not found at {csv_ops_path}")
         else:
             print(f"Loading operation logs from: {csv_ops_path}")
-            ops_records = []
             with open(csv_ops_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
@@ -106,107 +106,198 @@ def seed_database(reset: bool = True):
             db.commit()
             print(f"Seeded {len(task_records)} rows into 'task_time_data'.")
 
-        # 3. Seed starter tasks for dashboard if empty
-        if db.query(Task).count() == 0:
-            sample_tasks = [
-                Task(
-                    machine_id="EXC001",
-                    operator_id="OP1001",
-                    task_type="Earth Excavation",
-                    status="Pending",
-                    scheduled_time="2025-05-01T08:00:00",
-                    estimated_time_min=60,
-                    actual_time_min=None,
-                ),
-                Task(
-                    machine_id="EXC002",
-                    operator_id="OP1005",
-                    task_type="Trenching",
-                    status="In Progress",
-                    scheduled_time="2025-05-01T10:00:00",
-                    estimated_time_min=45,
-                    actual_time_min=None,
-                ),
-                Task(
-                    machine_id="EXC003",
-                    operator_id="OP1003",
-                    task_type="Material Loading",
-                    status="Completed",
-                    scheduled_time="2025-05-01T06:00:00",
-                    estimated_time_min=30,
-                    actual_time_min=28,
-                ),
-                Task(
-                    machine_id="EXC004",
-                    operator_id="OP1004",
-                    task_type="Grading",
-                    status="Pending",
-                    scheduled_time="2025-05-01T13:00:00",
-                    estimated_time_min=35,
-                    actual_time_min=None,
-                ),
-            ]
-            db.add_all(sample_tasks)
-            db.commit()
-            print(f"Seeded {len(sample_tasks)} demo rows into 'tasks'.")
+        # 3. Backfill alerts table from operation_log where safety_alert_triggered == 1
+        # This keeps alerts and anomalies consistent so the dashboard is rich and alive out of the box!
+        alert_records = []
+        for op in ops_records:
+            if op.safety_alert_triggered == 1:
+                # Classify alert based on log attributes
+                if op.seatbelt_status and op.seatbelt_status.strip().lower() == "unfastened":
+                    alert_type = "Seatbelt"
+                    severity = "High"
+                    msg = "Seatbelt unfastened during operation"
+                elif op.idling_time_min and op.idling_time_min > 45:
+                    alert_type = "Idling"
+                    severity = "Medium"
+                    msg = f"Idling time {op.idling_time_min}min exceeds threshold (45min)"
+                else:
+                    alert_type = "Anomaly"
+                    severity = "Medium"
+                    msg = "Safety alert triggered on machine"
 
-        # 4. Seed starter alerts if empty
-        if db.query(Alert).count() == 0:
-            sample_alerts = [
-                Alert(
-                    machine_id="EXC001",
-                    operator_id="OP1001",
-                    type="Seatbelt",
-                    severity="High",
-                    message="Seatbelt unfastened during operation",
-                    timestamp="2025-05-01T10:00:00",
-                ),
-                Alert(
-                    machine_id="EXC001",
-                    operator_id="OP1001",
-                    type="Idling",
-                    severity="Medium",
-                    message="Idling time 55min exceeds threshold (45min)",
-                    timestamp="2025-05-01T10:00:00",
-                ),
-                Alert(
-                    machine_id="EXC002",
-                    operator_id="OP1009",
-                    type="Seatbelt",
-                    severity="High",
-                    message="Seatbelt unfastened during operation",
-                    timestamp="2025-05-01T15:59:13",
-                ),
-            ]
-            db.add_all(sample_alerts)
-            db.commit()
-            print(f"Seeded {len(sample_alerts)} demo rows into 'alerts'.")
+                alert_records.append(
+                    Alert(
+                        machine_id=op.machine_id,
+                        operator_id=op.operator_id,
+                        type=alert_type,
+                        severity=severity,
+                        message=msg,
+                        timestamp=op.timestamp,
+                    )
+                )
 
-        # 5. Seed starter training modules if empty
-        if db.query(TrainingModule).count() == 0:
-            sample_modules = [
-                TrainingModule(
-                    title="Safe Excavation Basics",
-                    format="Video",
-                    duration_min=12,
-                    completed=0,
-                ),
-                TrainingModule(
-                    title="Proximity Awareness & Site Safety",
-                    format="Simulation",
-                    duration_min=25,
-                    completed=0,
-                ),
-                TrainingModule(
-                    title="Reducing Idle Time & Fuel Conservation",
-                    format="Instructor",
-                    duration_min=45,
-                    completed=1,
-                ),
-            ]
-            db.add_all(sample_modules)
+        if alert_records:
+            db.bulk_save_objects(alert_records)
             db.commit()
-            print(f"Seeded {len(sample_modules)} demo rows into 'training_modules'.")
+            print(f"Backfilled {len(alert_records)} historical safety alerts into 'alerts'.")
+
+        # 4. Seed realistic daily tasks (14 tasks across EXC001-EXC005, OP1001-OP1010)
+        daily_tasks = [
+            Task(
+                machine_id="EXC001",
+                operator_id="OP1001",
+                task_type="Earth Excavation",
+                status="Completed",
+                scheduled_time="2025-05-01T07:00:00",
+                estimated_time_min=60,
+                actual_time_min=58,
+            ),
+            Task(
+                machine_id="EXC002",
+                operator_id="OP1005",
+                task_type="Trenching",
+                status="Completed",
+                scheduled_time="2025-05-01T08:00:00",
+                estimated_time_min=45,
+                actual_time_min=52,
+            ),
+            Task(
+                machine_id="EXC003",
+                operator_id="OP1003",
+                task_type="Material Loading",
+                status="Completed",
+                scheduled_time="2025-05-01T08:30:00",
+                estimated_time_min=30,
+                actual_time_min=28,
+            ),
+            Task(
+                machine_id="EXC004",
+                operator_id="OP1004",
+                task_type="Grading",
+                status="In Progress",
+                scheduled_time="2025-05-01T09:30:00",
+                estimated_time_min=35,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC005",
+                operator_id="OP1006",
+                task_type="Demolition",
+                status="In Progress",
+                scheduled_time="2025-05-01T10:00:00",
+                estimated_time_min=90,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC001",
+                operator_id="OP1008",
+                task_type="Trenching",
+                status="In Progress",
+                scheduled_time="2025-05-01T10:15:00",
+                estimated_time_min=45,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC002",
+                operator_id="OP1009",
+                task_type="Material Loading",
+                status="Pending",
+                scheduled_time="2025-05-01T11:00:00",
+                estimated_time_min=30,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC003",
+                operator_id="OP1005",
+                task_type="Earth Excavation",
+                status="Pending",
+                scheduled_time="2025-05-01T11:30:00",
+                estimated_time_min=60,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC004",
+                operator_id="OP1002",
+                task_type="Grading",
+                status="Pending",
+                scheduled_time="2025-05-01T13:00:00",
+                estimated_time_min=35,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC005",
+                operator_id="OP1007",
+                task_type="Earth Excavation",
+                status="Pending",
+                scheduled_time="2025-05-01T14:00:00",
+                estimated_time_min=60,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC001",
+                operator_id="OP1002",
+                task_type="Material Loading",
+                status="Pending",
+                scheduled_time="2025-05-01T14:30:00",
+                estimated_time_min=30,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC002",
+                operator_id="OP1010",
+                task_type="Trenching",
+                status="Pending",
+                scheduled_time="2025-05-01T15:30:00",
+                estimated_time_min=45,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC003",
+                operator_id="OP1009",
+                task_type="Demolition",
+                status="Pending",
+                scheduled_time="2025-05-01T16:00:00",
+                estimated_time_min=90,
+                actual_time_min=None,
+            ),
+            Task(
+                machine_id="EXC004",
+                operator_id="OP1007",
+                task_type="Grading",
+                status="Pending",
+                scheduled_time="2025-05-01T16:30:00",
+                estimated_time_min=35,
+                actual_time_min=None,
+            ),
+        ]
+        db.add_all(daily_tasks)
+        db.commit()
+        print(f"Seeded {len(daily_tasks)} daily tasks into 'tasks'.")
+
+        # 5. Seed initial training modules
+        training_modules = [
+            TrainingModule(
+                title="Safe Excavation Basics",
+                format="Video",
+                duration_min=12,
+                completed=0,
+            ),
+            TrainingModule(
+                title="Proximity Awareness & Site Safety",
+                format="Simulation",
+                duration_min=25,
+                completed=0,
+            ),
+            TrainingModule(
+                title="Reducing Idle Time & Fuel Conservation",
+                format="Instructor",
+                duration_min=45,
+                completed=1,
+            ),
+        ]
+        db.add_all(training_modules)
+        db.commit()
+        print(f"Seeded {len(training_modules)} training modules into 'training_modules'.")
 
         print("=" * 60)
         print("Database seed completed successfully!")
