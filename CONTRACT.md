@@ -283,6 +283,28 @@ Score = 100 − penalties. Seatbelt: 1 pt per % of the operator's logged reading
 
 ---
 
+### Co-pilot
+
+**POST `/copilot/chat`**: one conversational turn. The client keeps the text history and sends up to the last 20 turns, starting and ending with a `user` turn.
+```json
+{
+  "operator_id": "OP1001", "machine_id": "EXC001",
+  "messages": [{ "role": "user", "content": "Log it: I clipped the barrier by the east trench, nobody hurt" }]
+}
+```
+Response:
+```json
+{
+  "reply": "I've drafted a medium severity incident: ... Please confirm it on screen.",
+  "source": "claude",
+  "draft_incident": { "machine_id": "EXC001", "operator_id": "OP1001", "description": "...", "severity": "Medium" },
+  "actions": [{ "tool": "draft_incident", "summary": "Medium incident drafted, awaiting confirmation" }]
+}
+```
+Claude answers with tools scoped to the request's operator and machine: tasks, task status, incident draft, time estimate, safety status, training. `source` is `"offline"` when no `ANTHROPIC_API_KEY` is configured or Claude is unreachable; a keyword parser then handles the same core commands. **Incidents are never saved by the co-pilot**: `draft_incident` is shown to the operator, and the client saves it with `POST /incidents` once they confirm. Task status changes made by the co-pilot are saved immediately and emit `task.updated`.
+
+---
+
 ### Live (WebSocket)
 
 Browsers must connect from an allowed origin (same rule as CORS); others are refused with 403. Clients only receive; nothing needs to be sent.
@@ -324,6 +346,11 @@ everyone re-pastes the updated section into their AI tool's context before their
 next prompt — don't let sessions drift on stale shapes.
 
 ## 6. Changelog
+
+### 2026-09-24: voice co-pilot
+
+- Added **POST `/copilot/chat`** (see §3 "Co-pilot").
+- New settings: `ANTHROPIC_API_KEY`, `COPILOT_MODEL` (default `claude-opus-5`), `COPILOT_EFFORT`, `COPILOT_TIMEOUT_S`. New dependency: `anthropic`.
 
 ### 2026-09-23: estimate ranges
 

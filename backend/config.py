@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     sim_enabled: bool = True
     sim_interval_s: float = Field(default=2.0, gt=0)
     sim_seed: int = 7
+
+    # Voice co-pilot. Without a key the co-pilot runs its offline command parser.
+    anthropic_api_key: SecretStr = SecretStr("")
+    copilot_model: str = "claude-opus-5"
+    copilot_effort: Literal["low", "medium", "high"] = "low"
+    copilot_timeout_s: float = Field(default=20.0, gt=0)
 
     @field_validator("log_level", mode="before")
     @classmethod

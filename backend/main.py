@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from database import Base, SessionLocal, engine
 from observability import RequestContextMiddleware, configure_logging
-from routers import anomalies, incidents, live, predict, safety, scores, system, tasks, training
+from routers import anomalies, copilot, incidents, live, predict, safety, scores, system, tasks, training
 from services.events import bus
 from services.scoring import ensure_training_catalog
 from services.simulator import run_simulator
@@ -74,5 +74,5 @@ async def log_validation_error(request: Request, exc: RequestValidationError):
     return await request_validation_exception_handler(request, exc)
 
 
-for module in (system, tasks, safety, incidents, anomalies, predict, training, scores, live):
+for module in (system, tasks, safety, incidents, anomalies, predict, training, scores, copilot, live):
     app.include_router(module.router)

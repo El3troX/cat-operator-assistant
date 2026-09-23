@@ -49,6 +49,8 @@ export const api = {
 
   scores: (operatorId) => request('/scores/operators', { params: { operator_id: operatorId } }),
 
+  copilotChat: (payload) => request('/copilot/chat', { method: 'POST', body: payload }),
+
   trainingModules: () => request('/training/modules'),
   updateTrainingModule: (id, patch) =>
     request(`/training/modules/${id}`, { method: 'PATCH', body: patch }),

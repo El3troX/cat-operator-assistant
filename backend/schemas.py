@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal, Optional
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 # ==========================================
 # Shared value sets (CONTRACT.md §1). Requests must use these exact strings.
@@ -192,6 +192,48 @@ class TrainingModuleResponse(BaseModel):
 
 class TrainingModulePatchRequest(RequestModel):
     completed: Literal[0, 1]
+
+
+# ==========================================
+# Co-pilot Schemas
+# ==========================================
+
+
+class CopilotMessage(RequestModel):
+    role: Literal["user", "assistant"]
+    content: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+
+class CopilotChatRequest(RequestModel):
+    operator_id: Identifier
+    machine_id: Identifier
+    messages: list[CopilotMessage] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def _ends_with_user(self):
+        if self.messages[0].role != "user" or self.messages[-1].role != "user":
+            raise ValueError("messages must start and end with a user message")
+        return self
+
+
+class IncidentDraft(BaseModel):
+    machine_id: str
+    operator_id: str
+    description: str
+    severity: AlertSeverity
+
+
+class CopilotAction(BaseModel):
+    tool: str
+    summary: str
+
+
+class CopilotChatResponse(BaseModel):
+    reply: str
+    # "offline" means the keyword fallback answered (no API key, or Claude unreachable).
+    source: Literal["claude", "offline"]
+    draft_incident: Optional[IncidentDraft] = None
+    actions: list[CopilotAction] = []
 
 
 # ==========================================
