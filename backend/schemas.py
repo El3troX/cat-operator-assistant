@@ -3,6 +3,11 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
+# ==========================================
+# Shared Enums (from CONTRACT.md Section 1)
+# ==========================================
+
+
 class SeatbeltStatus(str, Enum):
     FASTENED = "Fastened"
     UNFASTENED = "Unfastened"
@@ -48,10 +53,20 @@ class AlertSeverity(str, Enum):
     HIGH = "High"
 
 
+# ==========================================
+# General Schemas
+# ==========================================
+
+
 class HealthCheckResponse(BaseModel):
     status: str
     database: str
     tables_ready: bool
+
+
+# ==========================================
+# Dashboard Schemas
+# ==========================================
 
 
 class TaskResponse(BaseModel):
@@ -67,6 +82,16 @@ class TaskResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TaskPatchRequest(BaseModel):
+    status: Optional[str] = None
+    actual_time_min: Optional[int] = None
+
+
+# ==========================================
+# Safety Schemas
+# ==========================================
+
+
 class AlertResponse(BaseModel):
     id: int
     machine_id: str
@@ -77,3 +102,95 @@ class AlertResponse(BaseModel):
     timestamp: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SafetyCheckRequest(BaseModel):
+    machine_id: str
+    operator_id: str
+    seatbelt_status: Optional[str] = None
+    idling_time_min: Optional[int] = None
+    timestamp: str
+
+
+class ProximityRequest(BaseModel):
+    machine_id: str
+    distance_m: float
+    timestamp: str
+
+
+class ProximityResponse(BaseModel):
+    triggered: bool
+    severity: str
+    message: str
+
+
+# ==========================================
+# Incidents Schemas
+# ==========================================
+
+
+class IncidentCreateRequest(BaseModel):
+    machine_id: str
+    operator_id: str
+    description: str
+    severity: Optional[str] = None
+    timestamp: str
+
+
+class IncidentResponse(BaseModel):
+    id: int
+    machine_id: str
+    operator_id: str
+    description: str
+    severity: Optional[str] = None
+    timestamp: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# Anomaly Detection Schemas
+# ==========================================
+
+
+class AnomalyResponse(BaseModel):
+    machine_id: str
+    operator_id: str
+    type: str
+    detail: str
+    timestamp: str
+
+
+# ==========================================
+# Prediction Schemas
+# ==========================================
+
+
+class PredictTaskTimeRequest(BaseModel):
+    task_type: str
+    weather: str
+    operator_skill: str
+    machine_age_yrs: int
+
+
+class PredictTaskTimeResponse(BaseModel):
+    predicted_minutes: int
+
+
+# ==========================================
+# Training Hub Schemas
+# ==========================================
+
+
+class TrainingModuleResponse(BaseModel):
+    id: int
+    title: str
+    format: Optional[str] = None
+    duration_min: Optional[int] = None
+    completed: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TrainingModulePatchRequest(BaseModel):
+    completed: int

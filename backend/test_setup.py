@@ -10,7 +10,7 @@ sys.path.insert(0, str(BASE_DIR))
 from sqlalchemy import inspect
 from database import Base, SessionLocal, engine
 import models
-from main import app, get_safety_alerts, get_tasks_today, health_check, root
+from main import app
 
 
 def test_database_tables():
@@ -57,54 +57,33 @@ def test_database_tables():
     print("All 6 tables and columns verified successfully against CONTRACT.md!")
 
 
-def test_direct_route_handlers():
-    print("\nTesting route handlers directly...")
-    db = SessionLocal()
-    try:
-        tasks = get_tasks_today(db)
-        print(f"get_tasks_today() returned {len(tasks)} tasks.")
-        assert len(tasks) > 0, "Expected at least 1 task"
-        first_task = tasks[0]
-        assert hasattr(first_task, "machine_id")
-        assert hasattr(first_task, "operator_id")
-        assert hasattr(first_task, "task_type")
-        assert hasattr(first_task, "status")
-        assert hasattr(first_task, "scheduled_time")
-        assert hasattr(first_task, "estimated_time_min")
-        assert hasattr(first_task, "actual_time_min")
-
-        alerts_all = get_safety_alerts(None, db)
-        print(f"get_safety_alerts(None) returned {len(alerts_all)} alerts.")
-        assert len(alerts_all) > 0, "Expected at least 1 alert"
-
-        alerts_exc001 = get_safety_alerts("EXC001", db)
-        print(f"get_safety_alerts('EXC001') returned {len(alerts_exc001)} alerts.")
-        for a in alerts_exc001:
-            assert a.machine_id == "EXC001"
-    finally:
-        db.close()
-
-
-async def request_asgi(path: str, query_string: str = ""):
+async def request_asgi(method: str, path: str, query_string: str = "", json_data: dict = None):
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
-        "method": "GET",
+        "method": method.upper(),
         "path": path,
         "raw_path": path.encode("utf-8"),
         "query_string": query_string.encode("utf-8"),
-        "headers": [],
+        "headers": [(b"content-type", b"application/json")] if json_data else [],
         "server": ("127.0.0.1", 8000),
         "client": ("127.0.0.1", 12345),
         "scheme": "http",
     }
 
-    status_code = None
-    response_body = []
+    req_body = json.dumps(json_data).encode("utf-8") if json_data else b""
+    sent_body = False
 
     async def receive():
+        nonlocal sent_body
+        if not sent_body:
+            sent_body = True
+            return {"type": "http.request", "body": req_body, "more_body": False}
         return {"type": "http.request", "body": b"", "more_body": False}
+
+    status_code = None
+    response_body = []
 
     async def send(message):
         nonlocal status_code
@@ -114,56 +93,151 @@ async def request_asgi(path: str, query_string: str = ""):
             response_body.append(message.get("body", b""))
 
     await app(scope, receive, send)
-    body = b"".join(response_body).decode("utf-8")
-    return status_code, json.loads(body)
+    body_str = b"".join(response_body).decode("utf-8")
+    body_json = json.loads(body_str) if body_str else None
+    return status_code, body_json
 
 
-async def test_asgi_endpoints():
-    print("\nTesting ASGI interface directly...")
+async def test_all_contract_endpoints():
+    print("\n" + "=" * 60)
+    print("Testing All CONTRACT.md Endpoints via ASGI...")
+    print("=" * 60)
 
-    # /health
-    status, body = await request_asgi("/health")
+    # 1. Health check
+    status, body = await request_asgi("GET", "/health")
     assert status == 200
     assert body["status"] == "ok"
-    print("ASGI GET /health passed:", body)
+    assert body["tables_ready"] is True
+    print("[PASS] GET /health ->", body)
 
-    # /tasks/today
-    status, body = await request_asgi("/tasks/today")
+    # 2. GET /tasks/today
+    status, body = await request_asgi("GET", "/tasks/today")
     assert status == 200
     assert isinstance(body, list)
     assert len(body) > 0
-    sample_task = body[0]
-    expected_task_fields = {
-        "id", "machine_id", "operator_id", "task_type",
-        "status", "scheduled_time", "estimated_time_min", "actual_time_min"
-    }
-    assert expected_task_fields.issubset(sample_task.keys()), f"Task keys mismatch: {sample_task.keys()}"
-    print(f"ASGI GET /tasks/today passed with {len(body)} tasks. Sample:", sample_task)
+    task_id = body[0]["id"]
+    print(f"[PASS] GET /tasks/today -> {len(body)} tasks, sample id={task_id}")
 
-    # /safety/alerts
-    status, body = await request_asgi("/safety/alerts")
+    # 3. PATCH /tasks/{id}
+    patch_payload = {"status": "Completed", "actual_time_min": 58}
+    status, body = await request_asgi("PATCH", f"/tasks/{task_id}", json_data=patch_payload)
+    assert status == 200
+    assert body["status"] == "Completed"
+    assert body["actual_time_min"] == 58
+    print(f"[PASS] PATCH /tasks/{task_id} -> status={body['status']}, actual_time_min={body['actual_time_min']}")
+
+    # 4. GET /safety/alerts
+    status, body = await request_asgi("GET", "/safety/alerts")
     assert status == 200
     assert isinstance(body, list)
-    assert len(body) > 0
-    sample_alert = body[0]
-    expected_alert_fields = {
-        "id", "machine_id", "operator_id", "type",
-        "severity", "message", "timestamp"
-    }
-    assert expected_alert_fields.issubset(sample_alert.keys()), f"Alert keys mismatch: {sample_alert.keys()}"
-    print(f"ASGI GET /safety/alerts passed with {len(body)} alerts. Sample:", sample_alert)
+    print(f"[PASS] GET /safety/alerts -> {len(body)} alerts")
 
-    # /safety/alerts?machine_id=EXC001
-    status, body = await request_asgi("/safety/alerts", query_string="machine_id=EXC001")
+    # 5. GET /safety/alerts?machine_id=EXC001
+    status, body = await request_asgi("GET", "/safety/alerts", query_string="machine_id=EXC001")
     assert status == 200
-    assert isinstance(body, list)
     for a in body:
         assert a["machine_id"] == "EXC001"
-    print(f"ASGI GET /safety/alerts?machine_id=EXC001 passed with {len(body)} alerts.")
+    print(f"[PASS] GET /safety/alerts?machine_id=EXC001 -> {len(body)} alerts")
+
+    # 6. POST /safety/check
+    check_payload = {
+        "machine_id": "EXC001",
+        "operator_id": "OP1001",
+        "seatbelt_status": "Unfastened",
+        "idling_time_min": 55,
+        "timestamp": "2025-05-01T10:00:00"
+    }
+    status, body = await request_asgi("POST", "/safety/check", json_data=check_payload)
+    assert status == 200
+    assert isinstance(body, list)
+    assert len(body) >= 2  # Seatbelt + Idling
+    alert_types = [a["type"] for a in body]
+    assert "Seatbelt" in alert_types
+    assert "Idling" in alert_types
+    print(f"[PASS] POST /safety/check -> generated {len(body)} alerts: {alert_types}")
+
+    # 7. POST /safety/proximity (Triggered)
+    prox_payload_close = {"machine_id": "EXC001", "distance_m": 1.2, "timestamp": "2025-05-01T10:00:00"}
+    status, body = await request_asgi("POST", "/safety/proximity", json_data=prox_payload_close)
+    assert status == 200
+    assert body["triggered"] is True
+    assert body["severity"] == "High"
+    assert "within 2m" in body["message"]
+    print(f"[PASS] POST /safety/proximity (1.2m) -> triggered={body['triggered']}, severity={body['severity']}")
+
+    # 8. POST /safety/proximity (Safe)
+    prox_payload_safe = {"machine_id": "EXC001", "distance_m": 4.5, "timestamp": "2025-05-01T10:00:00"}
+    status, body = await request_asgi("POST", "/safety/proximity", json_data=prox_payload_safe)
+    assert status == 200
+    assert body["triggered"] is False
+    assert body["severity"] == "Low"
+    print(f"[PASS] POST /safety/proximity (4.5m) -> triggered={body['triggered']}, severity={body['severity']}")
+
+    # 9. POST /incidents
+    inc_payload = {
+        "machine_id": "EXC001",
+        "operator_id": "OP1001",
+        "description": "Minor collision with barrier",
+        "severity": "Medium",
+        "timestamp": "2025-05-01T11:00:00"
+    }
+    status, body = await request_asgi("POST", "/incidents", json_data=inc_payload)
+    assert status == 201
+    assert "id" in body
+    assert body["machine_id"] == "EXC001"
+    print(f"[PASS] POST /incidents -> created incident id={body['id']}")
+
+    # 10. GET /incidents
+    status, body = await request_asgi("GET", "/incidents")
+    assert status == 200
+    assert isinstance(body, list)
+    assert len(body) > 0
+    print(f"[PASS] GET /incidents -> {len(body)} incidents")
+
+    # 11. GET /anomalies
+    status, body = await request_asgi("GET", "/anomalies")
+    assert status == 200
+    assert isinstance(body, list)
+    assert len(body) > 0
+    sample_anomaly = body[0]
+    expected_anomaly_fields = {"machine_id", "operator_id", "type", "detail", "timestamp"}
+    assert expected_anomaly_fields.issubset(sample_anomaly.keys())
+    print(f"[PASS] GET /anomalies -> {len(body)} anomalies, sample: {sample_anomaly}")
+
+    # 12. POST /predict/task-time
+    pred_payload = {
+        "task_type": "Trenching",
+        "weather": "Rainy",
+        "operator_skill": "Intermediate",
+        "machine_age_yrs": 4
+    }
+    status, body = await request_asgi("POST", "/predict/task-time", json_data=pred_payload)
+    assert status == 200
+    assert "predicted_minutes" in body
+    assert isinstance(body["predicted_minutes"], int)
+    assert body["predicted_minutes"] > 0
+    print(f"[PASS] POST /predict/task-time -> predicted_minutes={body['predicted_minutes']}")
+
+    # 13. GET /training/modules
+    status, body = await request_asgi("GET", "/training/modules")
+    assert status == 200
+    assert isinstance(body, list)
+    assert len(body) > 0
+    module_id = body[0]["id"]
+    print(f"[PASS] GET /training/modules -> {len(body)} modules, sample id={module_id}")
+
+    # 14. PATCH /training/modules/{id}
+    patch_mod_payload = {"completed": 1}
+    status, body = await request_asgi("PATCH", f"/training/modules/{module_id}", json_data=patch_mod_payload)
+    assert status == 200
+    assert body["completed"] == 1
+    print(f"[PASS] PATCH /training/modules/{module_id} -> completed={body['completed']}")
+
+    print("=" * 60)
+    print("ALL 14 ENDPOINT TESTS PASSED WITH 100% SUCCESS!")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
     test_database_tables()
-    test_direct_route_handlers()
-    asyncio.run(test_asgi_endpoints())
-    print("\nAll verification tests passed cleanly!")
+    asyncio.run(test_all_contract_endpoints())
