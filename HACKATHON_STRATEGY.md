@@ -12,14 +12,17 @@ Computed on `data/` today. These go on the first slide.
 | Finding | Number | Source |
 |---|---|---|
 | Seatbelt **unfastened** in log readings | **17.8%** (1 in 6) | `machine_operations_log.csv`, 595 rows |
-| Readings where the existing system **raised an alert** | **0.34%** (2 readings) | same |
-| Readings our rule engine flags (unbelted or idling > 45 min) | **201 (33.8%)** | same, via `backend/seed.py` backfill |
+| Readings that **raised a safety alert** | **201 (33.8%, 1 in 3)**: every unbelted or > 45-min-idle reading | same (`Safety Alert Triggered` column) |
+| Unbelted rate, first vs second half of May | **18.2% → 17.4%**, flat despite a month of alerts | same |
+| Alerts coming from the top 3 operators (OP1004, OP1009, OP1006) | **111 of 201 (55%)** | same |
 | Readings with idling above the 45-min threshold | 127 | same |
 | Total idle time, 5 machines, 1 month | **~306 hours** | same |
 | Human task estimates that **overran** | **87%**, off by 11.7 min on average | `task_time_data.csv`, 300 rows |
 | Our ML model's error (5-fold cross-validated) | **3.5 min MAE, 70% better than humans** | RandomForest, same features |
 
-The story writes itself: **seatbelt violations appear in 1 of every 6 readings, but the current tooling flagged only 1 in 300 readings. We close that gap, and we coach operators so the violations stop.**
+The story writes itself: **the machines already raise an alert on 1 in 3 readings, yet a month of alerts left the unbelted rate flat at about 18%, and three operators generate over half of all alerts. Alerts alone don't change behaviour. We close the loop from alert to coaching, aimed at the people who need it.**
+
+> Data note: the `Safety Alert Triggered` column uses `1`/`0` in 591 rows and `Yes`/`No` only in the 4 sample rows copied from `IDEA.md`. Parse both, or the flag rate looks like 0.3% instead of 33.8%.
 
 > Caveat for Q&A: the dataset is synthetic/sample data. Say "on the provided dataset". Don't claim real-world results.
 
@@ -196,7 +199,7 @@ Add these endpoints to `CONTRACT.md` before building. All existing shapes stay u
 
 | Time | Beat | On screen |
 |---|---|---|
-| 0:00–0:25 | **Hook with the fleet's own data.** "In this fleet's own logs, seatbelts were off in **1 of every 6** readings. The current tooling flagged **1 in 300**." | Big numbers only, on black |
+| 0:00–0:25 | **Hook with the fleet's own data.** "This fleet's machines raised a safety alert on **1 in 3** readings last month, and the seatbelt violation rate didn't move. **Three operators** caused over half the alerts. Alerts don't change behaviour; coaching does." | Big numbers only, on black |
 | 0:25–0:50 | **Meet the operator.** Cab Mode on the tablet: today's tasks, and "Next: Trenching, 52 min (47–58)". Tap *why* to see "Rain +9 · Machine age +4". | Cab Mode |
 | 0:50–1:40 | **The mic drop** (below). | Cab + Command Center side by side |
 | 1:40–2:15 | **Sentinel.** Drag a worker blip toward the machine: rings turn red, the tablet buzzes, the Co-Pilot says *"Stop. Person 1.5 metres, rear left."* Then an ML anomaly appears with its reason: "Fuel per cycle 2.8× normal." | Radar + anomaly feed |
