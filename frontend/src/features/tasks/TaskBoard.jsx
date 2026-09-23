@@ -12,7 +12,6 @@ import { formatTime } from '../../lib/utils';
 import StatusBadge from './StatusBadge';
 
 function TaskCard({ task, onStatus }) {
-  // The API can't clear actual_time_min, so a task reopened after completion still carries one.
   const showActual = task.status === 'Completed' && task.actual_time_min != null;
   return (
     <motion.article
@@ -76,6 +75,8 @@ export default function TaskBoard() {
     const patch = { status };
     if (status === 'Completed' && task.actual_time_min == null && task.estimated_time_min) {
       patch.actual_time_min = task.estimated_time_min;
+    } else if (status !== 'Completed' && task.actual_time_min != null) {
+      patch.actual_time_min = null;
     }
     updateTask.mutate({ id: task.id, patch });
   };

@@ -12,14 +12,16 @@ import { MACHINES } from '../../lib/constants';
 import { useAnomalies } from '../../lib/queries';
 import { formatDateTime } from '../../lib/utils';
 
-// backend/main.py caps /anomalies at 100 rows
+// backend/routers/anomalies.py caps /anomalies at 100 rows
 const ANOMALY_API_LIMIT = 100;
 
+// A reading is typed by its most severe violation; "Anomaly" means the machine flagged it with no rule broken.
 const TYPE_META = {
   Idling: { icon: Timer, tone: 'warn', text: 'text-warn' },
   Seatbelt: { icon: ShieldAlert, tone: 'danger', text: 'text-danger' },
-  Safety: { icon: Siren, tone: 'info', text: 'text-info' },
+  Anomaly: { icon: Siren, tone: 'info', text: 'text-info' },
 };
+const TYPE_FILTERS = ['All', 'Idling', 'Seatbelt', { value: 'Anomaly', label: 'Other' }];
 
 function countBy(items, key) {
   const counts = new Map();
@@ -70,7 +72,7 @@ export default function AnomalyPanel() {
     <div>
       <PageHeader
         title="Unusual behaviour"
-        description="Machine-usage patterns flagged from the operation log: excessive idling, unbelted operation, safety trips."
+        description="Machine-usage patterns flagged from the operation log: excessive idling, unbelted operation and other machine safety flags."
         actions={
           <>
             <Select
@@ -96,7 +98,7 @@ export default function AnomalyPanel() {
         />
         <StatTile label="Idling" value={byType.Idling ?? 0} icon={Timer} tone="text-warn" hint="over 45 min per reading" />
         <StatTile label="Unbelted" value={byType.Seatbelt ?? 0} icon={ShieldAlert} tone="text-danger" />
-        <StatTile label="Safety trips" value={byType.Safety ?? 0} icon={Siren} tone="text-info" />
+        <StatTile label="Other flags" value={byType.Anomaly ?? 0} icon={Siren} tone="text-info" hint="machine alert, no rule broken" />
       </div>
 
       {error && <ErrorState error={error} onRetry={refetch} className="mt-6" />}
@@ -106,7 +108,7 @@ export default function AnomalyPanel() {
           <CardHeader
             icon={Activity}
             title="Flagged readings"
-            action={<Segmented label="Filter by type" value={type} onChange={setType} options={['All', 'Idling', 'Seatbelt', 'Safety']} />}
+            action={<Segmented label="Filter by type" value={type} onChange={setType} options={TYPE_FILTERS} />}
           />
           <CardBody>
             {isLoading && <SkeletonList rows={5} />}
@@ -115,7 +117,7 @@ export default function AnomalyPanel() {
             )}
             <ul className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
               {visible.map((a, i) => {
-                const meta = TYPE_META[a.type] ?? TYPE_META.Safety;
+                const meta = TYPE_META[a.type] ?? TYPE_META.Anomaly;
                 const Icon = meta.icon;
                 return (
                   <li key={`${a.machine_id}-${a.timestamp}-${i}`} className="flex items-center gap-4 rounded-xl border border-line bg-surface-2 px-4 py-3">

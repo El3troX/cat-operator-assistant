@@ -129,6 +129,8 @@ Request:
 ```
 Response: updated task object (same shape as above)
 
+Both fields are optional. Omit a field to leave it unchanged; send `"actual_time_min": null` to clear a recorded time (e.g. when a completed task is reopened).
+
 ---
 
 ### Safety
@@ -211,6 +213,8 @@ Response:
 ```
 (Threshold-based for the hackathon — no real ML needed here unless time allows.)
 
+Each flagged log reading appears once, typed by its most severe violation (`Seatbelt` before `Idling`); `detail` lists every rule it broke. A reading the machine flagged without breaking a rule is typed `Anomaly`. Returns at most the 100 most recent readings.
+
 ---
 
 ### Task Time Prediction
@@ -227,8 +231,9 @@ Request:
 ```
 Response:
 ```json
-{ "predicted_minutes": 51 }
+{ "predicted_minutes": 51, "source": "model" }
 ```
+`source` is `"model"` for the trained regressor, or `"historical"` / `"heuristic"` when the model is unavailable and the API falls back to past-job averages or rule-of-thumb multipliers.
 
 ---
 
@@ -259,3 +264,17 @@ Response: updated module object
 Ping the other two before changing anything in this file. Update it here, then
 everyone re-pastes the updated section into their AI tool's context before their
 next prompt — don't let sessions drift on stale shapes.
+
+## 6. Changelog
+
+### 2026-09-23: backend hardening (PLAN.md Phase 2)
+
+Existing request and response shapes are unchanged; clients that follow this contract keep working.
+
+- **Requests are validated.** Enum fields must use the exact §1 strings (case-sensitive). `machine_id` / `operator_id` must match `[A-Za-z0-9_-]{1,32}`. Minutes are 0–1440, `distance_m` is 0–1000, `machine_age_yrs` is 0–60, an incident `description` is 5–2000 characters and `completed` is `0` or `1`. Unknown fields are rejected. Violations return **422** with FastAPI's standard body: `{"detail": [{"loc": ["body", "field"], "msg": "...", "type": "..."}]}`.
+- **Timestamps** must be ISO 8601. They are stored as naive local time, `YYYY-MM-DDTHH:MM:SS`: fractions are dropped and UTC/offset times are converted to server-local time.
+- **`POST /predict/task-time`** adds `source` (see §3).
+- **`PATCH /tasks/{id}`** accepts `"actual_time_min": null` to clear a recorded time.
+- **`GET /anomalies`** labels a reading that breaks both rules as `Seatbelt` (previously `Idling`). A flag-only reading is typed `Anomaly` (previously `Safety`, which wasn't a §1 `AlertType`).
+- **Errors:** every response carries an `X-Request-ID` header (a valid incoming one is echoed). Unexpected failures return **500** `{"detail": "Internal server error", "request_id": "..."}`.
+- **CORS** allows only configured origins: any localhost port by default, plus `CORS_ORIGINS` (see `backend/.env.example`). It no longer sends `Access-Control-Allow-Credentials`.

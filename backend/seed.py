@@ -1,5 +1,6 @@
 import argparse
 import csv
+import logging
 import sys
 from pathlib import Path
 
@@ -10,6 +11,9 @@ sys.path.insert(0, str(BASE_DIR))
 
 from database import Base, SessionLocal, engine
 from models import Alert, Incident, OperationLog, Task, TaskTimeData, TrainingModule
+from services.rules import summarize_log_reading
+
+logger = logging.getLogger("seed")
 
 
 def normalize_iso_timestamp(ts: str) -> str:
@@ -35,9 +39,7 @@ def parse_alert_flag(val: str) -> int:
 
 
 def seed_database(reset: bool = True):
-    print("=" * 60)
-    print("Starting database seed process...")
-    print("=" * 60)
+    logger.info("Seeding %s", engine.url.render_as_string(hide_password=True))
 
     # Ensure tables are created
     Base.metadata.create_all(bind=engine)
@@ -45,7 +47,7 @@ def seed_database(reset: bool = True):
     db = SessionLocal()
     try:
         if reset:
-            print("Resetting existing records in tables...")
+            logger.info("Resetting existing records in tables...")
             db.query(OperationLog).delete()
             db.query(TaskTimeData).delete()
             db.query(Task).delete()
@@ -58,9 +60,9 @@ def seed_database(reset: bool = True):
         csv_ops_path = PROJECT_ROOT / "data" / "machine_operations_log.csv"
         ops_records = []
         if not csv_ops_path.exists():
-            print(f"Warning: CSV file not found at {csv_ops_path}")
+            logger.warning("CSV file not found at %s", csv_ops_path)
         else:
-            print(f"Loading operation logs from: {csv_ops_path}")
+            logger.info("Loading operation logs from: %s", csv_ops_path)
             with open(csv_ops_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
@@ -79,14 +81,14 @@ def seed_database(reset: bool = True):
                     )
             db.bulk_save_objects(ops_records)
             db.commit()
-            print(f"Seeded {len(ops_records)} rows into 'operation_log'.")
+            logger.info("Seeded %d rows into 'operation_log'.", len(ops_records))
 
         # 2. Seed task_time_data from task_time_data.csv
         csv_task_path = PROJECT_ROOT / "data" / "task_time_data.csv"
         if not csv_task_path.exists():
-            print(f"Warning: CSV file not found at {csv_task_path}")
+            logger.warning("CSV file not found at %s", csv_task_path)
         else:
-            print(f"Loading task time data from: {csv_task_path}")
+            logger.info("Loading task time data from: %s", csv_task_path)
             task_records = []
             with open(csv_task_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -104,42 +106,29 @@ def seed_database(reset: bool = True):
                     )
             db.bulk_save_objects(task_records)
             db.commit()
-            print(f"Seeded {len(task_records)} rows into 'task_time_data'.")
+            logger.info("Seeded %d rows into 'task_time_data'.", len(task_records))
 
-        # 3. Backfill alerts table from operation_log where safety_alert_triggered == 1
-        # This keeps alerts and anomalies consistent so the dashboard is rich and alive out of the box!
+        # 3. Backfill one alert per flagged operation_log reading, labelled exactly as /anomalies labels it.
         alert_records = []
         for op in ops_records:
-            if op.safety_alert_triggered == 1:
-                # Classify alert based on log attributes
-                if op.seatbelt_status and op.seatbelt_status.strip().lower() == "unfastened":
-                    alert_type = "Seatbelt"
-                    severity = "High"
-                    msg = "Seatbelt unfastened during operation"
-                elif op.idling_time_min and op.idling_time_min > 45:
-                    alert_type = "Idling"
-                    severity = "Medium"
-                    msg = f"Idling time {op.idling_time_min}min exceeds threshold (45min)"
-                else:
-                    alert_type = "Anomaly"
-                    severity = "Medium"
-                    msg = "Safety alert triggered on machine"
-
-                alert_records.append(
-                    Alert(
-                        machine_id=op.machine_id,
-                        operator_id=op.operator_id,
-                        type=alert_type,
-                        severity=severity,
-                        message=msg,
-                        timestamp=op.timestamp,
-                    )
+            if op.safety_alert_triggered != 1:
+                continue
+            violation = summarize_log_reading(op.seatbelt_status, op.idling_time_min, alert_flag=True)
+            alert_records.append(
+                Alert(
+                    machine_id=op.machine_id,
+                    operator_id=op.operator_id,
+                    type=violation.type,
+                    severity=violation.severity,
+                    message=violation.message,
+                    timestamp=op.timestamp,
                 )
+            )
 
         if alert_records:
             db.bulk_save_objects(alert_records)
             db.commit()
-            print(f"Backfilled {len(alert_records)} historical safety alerts into 'alerts'.")
+            logger.info("Backfilled %d historical safety alerts into 'alerts'.", len(alert_records))
 
         # 4. Seed realistic daily tasks (14 tasks across EXC001-EXC005, OP1001-OP1010)
         daily_tasks = [
@@ -272,7 +261,7 @@ def seed_database(reset: bool = True):
         ]
         db.add_all(daily_tasks)
         db.commit()
-        print(f"Seeded {len(daily_tasks)} daily tasks into 'tasks'.")
+        logger.info("Seeded %d daily tasks into 'tasks'.", len(daily_tasks))
 
         # 5. Seed initial training modules
         training_modules = [
@@ -297,11 +286,8 @@ def seed_database(reset: bool = True):
         ]
         db.add_all(training_modules)
         db.commit()
-        print(f"Seeded {len(training_modules)} training modules into 'training_modules'.")
-
-        print("=" * 60)
-        print("Database seed completed successfully!")
-        print("=" * 60)
+        logger.info("Seeded %d training modules into 'training_modules'.", len(training_modules))
+        logger.info("Database seed completed successfully.")
 
     finally:
         db.close()
@@ -315,4 +301,5 @@ if __name__ == "__main__":
         help="Append records without clearing existing data.",
     )
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     seed_database(reset=not args.no_reset)

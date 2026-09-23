@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
-import { Calculator, Timer } from 'lucide-react';
+import { BadgeCheck, Calculator, Timer, TriangleAlert } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardBody, CardHeader } from '../../components/ui/card';
 import { Field, Select } from '../../components/ui/form';
@@ -8,6 +9,23 @@ import { OPERATOR_SKILLS, TASK_TYPES, WEATHERS } from '../../lib/constants';
 import { usePredictTaskTime } from '../../lib/queries';
 
 const MACHINE_AGES = Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} yr${i ? 's' : ''}` }));
+
+const SOURCE_META = {
+  model: { tone: 'ok', icon: BadgeCheck, label: 'ML model' },
+  historical: { tone: 'warn', icon: TriangleAlert, label: 'Model offline: historical average' },
+  heuristic: { tone: 'warn', icon: TriangleAlert, label: 'Model offline: rule-of-thumb estimate' },
+};
+
+function SourceBadge({ source }) {
+  const meta = SOURCE_META[source] ?? SOURCE_META.heuristic;
+  const Icon = meta.icon;
+  return (
+    <Badge tone={meta.tone} className="mt-3">
+      <Icon className="size-3.5" aria-hidden />
+      {meta.label}
+    </Badge>
+  );
+}
 
 export default function TaskTimeEstimator() {
   const predict = usePredictTaskTime();
@@ -63,6 +81,7 @@ export default function TaskTimeEstimator() {
                 {predict.variables.task_type} · {predict.variables.weather} · {predict.variables.operator_skill} operator ·{' '}
                 {predict.variables.machine_age_yrs} yr machine
               </p>
+              <SourceBadge source={predict.data.source} />
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-2 p-8 text-center">

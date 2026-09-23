@@ -1,56 +1,40 @@
-from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+from typing import Annotated, Literal, Optional
 
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 # ==========================================
-# Shared Enums (from CONTRACT.md Section 1)
+# Shared value sets (CONTRACT.md §1). Requests must use these exact strings.
 # ==========================================
 
-
-class SeatbeltStatus(str, Enum):
-    FASTENED = "Fastened"
-    UNFASTENED = "Unfastened"
-
-
-class TaskType(str, Enum):
-    EARTH_EXCAVATION = "Earth Excavation"
-    TRENCHING = "Trenching"
-    MATERIAL_LOADING = "Material Loading"
-    GRADING = "Grading"
-    DEMOLITION = "Demolition"
+SeatbeltStatus = Literal["Fastened", "Unfastened"]
+TaskType = Literal["Earth Excavation", "Trenching", "Material Loading", "Grading", "Demolition"]
+Weather = Literal["Sunny", "Rainy", "Cloudy", "Windy"]
+OperatorSkill = Literal["Beginner", "Intermediate", "Expert"]
+TaskStatus = Literal["Pending", "In Progress", "Completed"]
+AlertSeverity = Literal["Low", "Medium", "High"]
+PredictionSource = Literal["model", "historical", "heuristic"]
 
 
-class Weather(str, Enum):
-    SUNNY = "Sunny"
-    RAINY = "Rainy"
-    CLOUDY = "Cloudy"
-    WINDY = "Windy"
+def _normalize_timestamp(value: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise ValueError("must be an ISO 8601 date-time, e.g. 2025-05-01T10:00:00") from None
+    # Stored timestamps are naive local time and sorted as strings, so every value must share one format.
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone().replace(tzinfo=None)
+    return parsed.isoformat(timespec="seconds")
 
 
-class OperatorSkill(str, Enum):
-    BEGINNER = "Beginner"
-    INTERMEDIATE = "Intermediate"
-    EXPERT = "Expert"
+Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")]
+Timestamp = Annotated[str, AfterValidator(_normalize_timestamp)]
+Minutes = Annotated[int, Field(ge=0, le=1440)]
 
 
-class TaskStatus(str, Enum):
-    PENDING = "Pending"
-    IN_PROGRESS = "In Progress"
-    COMPLETED = "Completed"
-
-
-class AlertType(str, Enum):
-    SEATBELT = "Seatbelt"
-    PROXIMITY = "Proximity"
-    IDLING = "Idling"
-    ANOMALY = "Anomaly"
-
-
-class AlertSeverity(str, Enum):
-    LOW = "Low"
-    MEDIUM = "Medium"
-    HIGH = "High"
+class RequestModel(BaseModel):
+    # Unknown fields are almost always client typos (e.g. "actual_time"), which would otherwise be silently ignored.
+    model_config = ConfigDict(extra="forbid")
 
 
 # ==========================================
@@ -82,9 +66,10 @@ class TaskResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TaskPatchRequest(BaseModel):
-    status: Optional[str] = None
-    actual_time_min: Optional[int] = None
+class TaskPatchRequest(RequestModel):
+    status: Optional[TaskStatus] = None
+    # Sending null explicitly clears a recorded time (e.g. when a task is reopened).
+    actual_time_min: Optional[Minutes] = None
 
 
 # ==========================================
@@ -104,18 +89,18 @@ class AlertResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SafetyCheckRequest(BaseModel):
-    machine_id: str
-    operator_id: str
-    seatbelt_status: Optional[str] = None
-    idling_time_min: Optional[int] = None
-    timestamp: str
+class SafetyCheckRequest(RequestModel):
+    machine_id: Identifier
+    operator_id: Identifier
+    seatbelt_status: Optional[SeatbeltStatus] = None
+    idling_time_min: Optional[Minutes] = None
+    timestamp: Timestamp
 
 
-class ProximityRequest(BaseModel):
-    machine_id: str
-    distance_m: float
-    timestamp: str
+class ProximityRequest(RequestModel):
+    machine_id: Identifier
+    distance_m: float = Field(ge=0, le=1000)
+    timestamp: Timestamp
 
 
 class ProximityResponse(BaseModel):
@@ -129,12 +114,12 @@ class ProximityResponse(BaseModel):
 # ==========================================
 
 
-class IncidentCreateRequest(BaseModel):
-    machine_id: str
-    operator_id: str
-    description: str
-    severity: Optional[str] = None
-    timestamp: str
+class IncidentCreateRequest(RequestModel):
+    machine_id: Identifier
+    operator_id: Identifier
+    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=2000)]
+    severity: Optional[AlertSeverity] = None
+    timestamp: Timestamp
 
 
 class IncidentResponse(BaseModel):
@@ -166,15 +151,17 @@ class AnomalyResponse(BaseModel):
 # ==========================================
 
 
-class PredictTaskTimeRequest(BaseModel):
-    task_type: str
-    weather: str
-    operator_skill: str
-    machine_age_yrs: int
+class PredictTaskTimeRequest(RequestModel):
+    task_type: TaskType
+    weather: Weather
+    operator_skill: OperatorSkill
+    machine_age_yrs: int = Field(ge=0, le=60)
 
 
 class PredictTaskTimeResponse(BaseModel):
     predicted_minutes: int
+    # "model" = trained regressor; the other two mean the model was unavailable.
+    source: PredictionSource
 
 
 # ==========================================
@@ -192,5 +179,5 @@ class TrainingModuleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TrainingModulePatchRequest(BaseModel):
-    completed: int
+class TrainingModulePatchRequest(RequestModel):
+    completed: Literal[0, 1]

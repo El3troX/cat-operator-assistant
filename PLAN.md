@@ -42,15 +42,16 @@ The fastest way to make four "done" backend features actually visible.
 
 ## Phase 2 — Backend correctness & hardening
 
-- [ ] Enforce the CONTRACT.md enums server-side: switch `schemas.py` request models from `str` to `Literal[...]`/`Enum` for `task_type`, `weather`, `operator_skill`, `status`, `severity`, `type` — reject invalid values with 422 instead of silently accepting them
-- [ ] Fix CORS: replace `allow_origins=["*"]` + `allow_credentials=True` with an explicit allow-list driven by env config (see below) — the current combination is invalid per the CORS spec and a real misconfiguration
-- [ ] Add a global exception handler (FastAPI `@app.exception_handler`) returning consistent JSON error shapes instead of raw 500s
-- [ ] Remove the bare `except Exception: pass` around the ML call in `/predict/task-time`; log the failure and surface a `"source": "fallback"` field in the response so the frontend/demo can tell when it's degraded to the heuristic
-- [ ] Introduce `pydantic-settings` for config (DB path, CORS origins, log level) backed by a `.env` file; commit `.env.example`
-- [ ] Replace `print()` calls in `seed.py`/`train.py` with the `logging` module; add basic request logging middleware in `main.py`
-- [ ] Split `main.py` into routers (`routers/tasks.py`, `routers/safety.py`, `routers/incidents.py`, `routers/anomalies.py`, `routers/predict.py`, `routers/training.py`) — one file per CONTRACT.md section, mounted via `APIRouter`
+- [x] Enforce the CONTRACT.md enums server-side with `Literal` types, plus ID patterns, numeric ranges, ISO 8601 timestamps and rejection of unknown fields. Invalid input gets a 422 naming the field (`schemas.py`)
+- [x] Fix CORS: explicit origins from `CORS_ORIGINS` plus a localhost-only regex by default, and no credentials (`main.py`, `config.py`)
+- [x] Unhandled errors return a JSON 500 with a `request_id`. The handler sits inside CORS so the browser can read the error (`observability.py`)
+- [x] Replace the bare `except: pass` around the ML call: failures are logged and the response carries `source` (`model` / `historical` / `heuristic`). The model loads at startup, so the first prediction takes ~150 ms instead of 4.5 s (`services/task_time.py`)
+- [x] `pydantic-settings` config (`DATABASE_URL`, `CORS_ORIGINS`, `CORS_ORIGIN_REGEX`, `LOG_LEVEL`, `LOG_JSON`) with committed `backend/.env.example` and `frontend/.env.example`; `.env` files are git-ignored
+- [x] `logging` replaces `print()` in `seed.py` and `ml/train.py` (now `main()` with `--output`). Request logging carries an `X-Request-ID`, with optional JSON lines
+- [x] Split `main.py` into `routers/` (one per CONTRACT.md section) and `services/` (`rules.py`, `task_time.py`). The seed backfill and `/anomalies` now share one classifier
+- [x] Fix `PATCH /tasks/{id}` so `"actual_time_min": null` clears a recorded time; the task board sends it when a task is reopened
 
-**Exit criteria:** invalid input is rejected with clear errors, no config is hardcoded, CORS only allows the known frontend origin(s), and logs are structured enough to debug a demo failure after the fact.
+**Exit criteria:** invalid input is rejected with clear errors, no config is hardcoded, CORS only allows the known frontend origin(s), and logs are structured enough to debug a demo failure after the fact. **Met 2026-09-23:** the 14 existing contract smoke tests pass, plus 37 new behaviour checks against a throwaway database. Changes are listed in CONTRACT.md §6.
 
 ---
 
