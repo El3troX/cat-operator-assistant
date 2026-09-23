@@ -1,4 +1,7 @@
+import argparse
+import logging
 from pathlib import Path
+
 import joblib
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -8,98 +11,75 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-# Resolve paths
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+DEFAULT_OUTPUT = BASE_DIR / "model.pkl"
+CSV_CANDIDATES = [BASE_DIR / "task_time_data.csv", PROJECT_ROOT / "data" / "task_time_data.csv"]
 
-csv_paths = [
-    BASE_DIR / "task_time_data.csv",
-    PROJECT_ROOT / "data" / "task_time_data.csv",
-]
+CATEGORICAL_FEATURES = ["task_type", "weather", "operator_skill"]
+NUMERIC_FEATURES = ["machine_age_yrs"]
+TARGET = "actual_time_min"
 
-csv_file = None
-for p in csv_paths:
-    if p.exists():
-        csv_file = p
-        break
+logger = logging.getLogger("ml.train")
 
-if not csv_file:
-    raise FileNotFoundError(f"Could not find task_time_data.csv in {[str(p) for p in csv_paths]}")
 
-print(f"Loading data from: {csv_file}")
-df = pd.read_csv(csv_file)
+def load_dataset() -> pd.DataFrame:
+    csv_file = next((path for path in CSV_CANDIDATES if path.exists()), None)
+    if csv_file is None:
+        raise FileNotFoundError(f"Could not find task_time_data.csv in {[str(p) for p in CSV_CANDIDATES]}")
 
-# Standardize column names
-df.columns = [
-    col.strip()
-    .lower()
-    .replace(" ", "_")
-    .replace("(", "")
-    .replace(")", "")
-    for col in df.columns
-]
-
-print(f"Dataset shape: {df.shape}")
-print(f"Columns: {list(df.columns)}")
-
-# Define feature columns and target
-feature_cols = ["task_type", "weather", "operator_skill", "machine_age_yrs"]
-target_col = "actual_time_min"
-
-X = df[feature_cols]
-y = df[target_col]
-
-# Train / Test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
-
-# Build unified preprocessing + regressor pipeline
-categorical_features = ["task_type", "weather", "operator_skill"]
-numeric_features = ["machine_age_yrs"]
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_features),
-        ("num", "passthrough", numeric_features),
+    logger.info("Loading data from: %s", csv_file)
+    df = pd.read_csv(csv_file)
+    df.columns = [
+        col.strip().lower().replace(" ", "_").replace("(", "").replace(")", "") for col in df.columns
     ]
-)
+    logger.info("Dataset shape: %s, columns: %s", df.shape, list(df.columns))
+    return df
 
-pipeline = Pipeline(
-    steps=[
-        ("preprocessor", preprocessor),
-        ("regressor", RandomForestRegressor(n_estimators=100, random_state=42)),
-    ]
-)
 
-# Train model
-print("Training RandomForestRegressor pipeline...")
-pipeline.fit(X_train, y_train)
+def build_pipeline() -> Pipeline:
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), CATEGORICAL_FEATURES),
+            ("num", "passthrough", NUMERIC_FEATURES),
+        ]
+    )
+    return Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("regressor", RandomForestRegressor(n_estimators=100, random_state=42)),
+        ]
+    )
 
-# Evaluate on test set
-y_pred = pipeline.predict(X_test)
-mae = mean_absolute_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
 
-print("=" * 60)
-print("EVALUATION RESULTS (For your hackathon pitch):")
-print(f"  Mean Absolute Error (MAE): {mae:.2f} minutes")
-print(f"  R-squared (R²):           {r2:.4f} ({r2 * 100:.1f}% variance explained)")
-print("=" * 60)
+def main(output: Path) -> None:
+    df = load_dataset()
+    features = df[CATEGORICAL_FEATURES + NUMERIC_FEATURES]
+    X_train, X_test, y_train, y_test = train_test_split(features, df[TARGET], test_size=0.2, random_state=42)
 
-# Save the fitted pipeline
-model_output_path = BASE_DIR / "model.pkl"
-joblib.dump(pipeline, model_output_path)
-print(f"Model successfully saved to: {model_output_path}")
+    pipeline = build_pipeline()
+    logger.info("Training RandomForestRegressor pipeline...")
+    pipeline.fit(X_train, y_train)
 
-# Sanity check test prediction matching CONTRACT.md example
-test_input = pd.DataFrame([
-    {
-        "task_type": "Trenching",
-        "weather": "Rainy",
-        "operator_skill": "Intermediate",
-        "machine_age_yrs": 4,
-    }
-])
-sample_pred = pipeline.predict(test_input)[0]
-print(f"Sample prediction [Trenching, Rainy, Intermediate, 4 yrs]: {sample_pred:.1f} minutes")
+    y_pred = pipeline.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    logger.info("Holdout MAE: %.2f minutes | R2: %.4f (%.1f%% variance explained)", mae, r2, r2 * 100)
+
+    joblib.dump(pipeline, output)
+    logger.info("Model saved to: %s", output)
+
+    sample = pd.DataFrame(
+        [{"task_type": "Trenching", "weather": "Rainy", "operator_skill": "Intermediate", "machine_age_yrs": 4}]
+    )
+    logger.info("Sample prediction [Trenching, Rainy, Intermediate, 4 yrs]: %.1f minutes", pipeline.predict(sample)[0])
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train the task-time regression model.")
+    parser.add_argument(
+        "--output", type=Path, default=DEFAULT_OUTPUT, help=f"where to write the fitted pipeline (default: {DEFAULT_OUTPUT})"
+    )
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    main(args.output)

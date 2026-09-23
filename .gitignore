@@ -5,3 +5,8 @@ __pycache__/
 *.py[cod]
 *.db
 *.sqlite3
+
+# Local config may hold secrets; only the examples are committed.
+.env
+.env.*
+!.env.example
