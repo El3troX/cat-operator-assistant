@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 
@@ -9,7 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from database import Base, engine
 from observability import RequestContextMiddleware, configure_logging
-from routers import anomalies, incidents, predict, safety, system, tasks, training
+from routers import anomalies, incidents, live, predict, safety, system, tasks, training
+from services.events import bus
+from services.simulator import run_simulator
 from services.task_time import warm_up
 
 settings = get_settings()
@@ -21,6 +25,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     warm_up()
+    bus.bind(asyncio.get_running_loop())
+    simulator_task = (
+        asyncio.create_task(run_simulator(settings.sim_interval_s, settings.sim_seed)) if settings.sim_enabled else None
+    )
     logger.info(
         "API ready: database=%s cors_origins=%s cors_origin_regex=%s",
         engine.url.render_as_string(hide_password=True),
@@ -28,6 +36,10 @@ async def lifespan(app: FastAPI):
         settings.cors_origin_regex or "-",
     )
     yield
+    if simulator_task:
+        simulator_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await simulator_task
 
 
 app = FastAPI(
@@ -59,5 +71,5 @@ async def log_validation_error(request: Request, exc: RequestValidationError):
     return await request_validation_exception_handler(request, exc)
 
 
-for module in (system, tasks, safety, incidents, anomalies, predict, training):
+for module in (system, tasks, safety, incidents, anomalies, predict, training, live):
     app.include_router(module.router)

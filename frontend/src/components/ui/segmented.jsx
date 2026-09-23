@@ -9,7 +9,7 @@ export function Segmented({ value, onChange, options, size = 'md', label, classN
     <div
       role="radiogroup"
       aria-label={label}
-      className={cn('inline-flex rounded-xl border border-line bg-surface-2 p-1', className)}
+      className={cn('inline-flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface-2 p-1 [scrollbar-width:none]', className)}
     >
       {options.map((opt) => {
         const optValue = typeof opt === 'string' ? opt : opt.value;

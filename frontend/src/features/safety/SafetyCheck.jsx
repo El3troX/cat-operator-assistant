@@ -1,12 +1,13 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
-import { ShieldAlert, ShieldCheck, Timer } from 'lucide-react';
+import { Radio, ShieldAlert, ShieldCheck, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import { SeverityBadge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardBody, CardHeader } from '../../components/ui/card';
 import { Segmented } from '../../components/ui/segmented';
 import { IDLE_THRESHOLD_MIN } from '../../lib/constants';
+import { useMachineTelemetry } from '../../lib/live';
 import { markLocalAlerts } from '../../lib/local-alerts';
 import { useSafetyCheck } from '../../lib/queries';
 import { useSession } from '../../lib/session';
@@ -19,6 +20,7 @@ const SEATBELT_OPTIONS = [
 
 export default function SafetyCheck({ size = 'md' }) {
   const { machineId, operatorId } = useSession();
+  const liveReading = useMachineTelemetry(machineId);
   const check = useSafetyCheck();
   const [seatbelt, setSeatbelt] = useState('Fastened');
   const [idle, setIdle] = useState(20);
@@ -57,6 +59,20 @@ export default function SafetyCheck({ size = 'md' }) {
         icon={ShieldCheck}
         title="Live safety check"
         description={`Run the rule engine on the current cab reading for ${machineId} / ${operatorId}.`}
+        action={
+          liveReading && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSeatbelt(liveReading.seatbelt_status === 'Unfastened' ? 'Unfastened' : 'Fastened');
+                setIdle(liveReading.idling_time_min ?? 0);
+              }}
+            >
+              <Radio className="size-3.5" aria-hidden /> Use live reading
+            </Button>
+          )
+        }
       />
       <CardBody className="space-y-5">
         <div>

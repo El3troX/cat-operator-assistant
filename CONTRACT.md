@@ -253,6 +253,34 @@ Response: updated module object
 
 ---
 
+### Live (WebSocket)
+
+Browsers must connect from an allowed origin (same rule as CORS); others are refused with 403. Clients only receive; nothing needs to be sent.
+
+**WS `/ws/events`**: one message each time data changes through the API (or the simulator raises an alert). `data` has the same shape as the matching REST response.
+```json
+{ "type": "alert.created", "data": { "id": 212, "machine_id": "EXC003", "operator_id": "OP1003", "type": "Proximity", "severity": "High", "message": "Object within 2m of machine", "timestamp": "2026-09-23T22:37:22" } }
+```
+Types: `alert.created`, `incident.created`, `task.updated`, `training.updated`.
+
+**WS `/ws/telemetry`**: one frame every `SIM_INTERVAL_S` (default 2 s), plus the latest frame immediately on connect. Cab readings are replayed from `operation_log` (advancing every 5 frames); ground workers are simulated. A worker entering 2 m raises a Proximity alert (with the machine's current operator) and emits `alert.created`.
+```json
+{
+  "ts": "2026-09-23T22:30:14",
+  "machines": [
+    {
+      "machine_id": "EXC001", "operator_id": "OP1001", "seatbelt_status": "Unfastened",
+      "idling_time_min": 55, "fuel_used_l": 3.8, "load_cycles": 2, "reading_ts": "2025-05-01T10:00:00",
+      "nearest_m": 7.7,
+      "workers": [{ "id": "EXC001-W1", "distance_m": 7.71, "bearing_deg": 92 }]
+    }
+  ]
+}
+```
+`bearing_deg` is clockwise from the machine's front.
+
+---
+
 ## 4. Build Order Reminder
 
 - Frontend can build against these exact JSON shapes as **mock data** before the backend is live — don't wait.
@@ -266,6 +294,12 @@ everyone re-pastes the updated section into their AI tool's context before their
 next prompt — don't let sessions drift on stale shapes.
 
 ## 6. Changelog
+
+### 2026-09-23: live updates
+
+- Added **WS `/ws/events`** and **WS `/ws/telemetry`** (see §3 "Live"). No REST shape changed.
+- Mutating endpoints now also publish an event after saving.
+- New settings: `SIM_ENABLED`, `SIM_INTERVAL_S`, `SIM_SEED` (see `backend/.env.example`).
 
 ### 2026-09-23: backend hardening (PLAN.md Phase 2)
 

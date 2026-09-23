@@ -1,5 +1,6 @@
 import { WifiOff } from 'lucide-react';
 import { API_BASE_URL } from '../lib/api';
+import { useLiveStatus } from '../lib/live';
 import { useHealth } from '../lib/queries';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -7,18 +8,20 @@ import { LiveDot } from './ui/live-dot';
 
 export function ApiStatusPill({ className }) {
   const { isSuccess, isError } = useHealth();
-  const label = isSuccess ? 'Online' : isError ? 'Offline' : 'Connecting';
+  const { status } = useLiveStatus();
+  const live = isSuccess && status === 'open';
+  const label = live ? 'Live' : isSuccess ? 'Online' : isError ? 'Offline' : 'Connecting';
   return (
     <span
       className={cn('flex items-center gap-2 rounded-full border border-line bg-surface-2 px-3 py-1 text-xs font-semibold', className)}
-      title={`Backend: ${API_BASE_URL}`}
+      title={live ? `Live updates from ${API_BASE_URL}` : `Backend: ${API_BASE_URL}${isSuccess ? ' (live updates reconnecting)' : ''}`}
     >
       {isSuccess ? (
         <LiveDot />
       ) : (
         <span className={cn('size-2 rounded-full', isError ? 'bg-danger' : 'bg-warn animate-pulse')} aria-hidden />
       )}
-      <span className={isError ? 'text-danger' : 'text-muted'}>{label}</span>
+      <span className={isError ? 'text-danger' : live ? 'text-ok' : 'text-muted'}>{label}</span>
     </span>
   );
 }

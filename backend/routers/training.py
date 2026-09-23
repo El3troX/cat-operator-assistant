@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from schemas import TrainingModulePatchRequest, TrainingModuleResponse
+from services.events import publish_event
 
 router = APIRouter(tags=["Training Hub"])
 
@@ -22,4 +23,6 @@ def patch_training_module(module_id: int, payload: TrainingModulePatchRequest, d
     module.completed = payload.completed
     db.commit()
     db.refresh(module)
-    return module
+    response = TrainingModuleResponse.model_validate(module)
+    publish_event("training.updated", response)
+    return response

@@ -8,12 +8,14 @@ import { Select } from '../../components/ui/form';
 import { LiveDot } from '../../components/ui/live-dot';
 import { EmptyState, ErrorState, SkeletonList } from '../../components/ui/states';
 import { MACHINES } from '../../lib/constants';
+import { useLiveStatus } from '../../lib/live';
 import { useIncidents } from '../../lib/queries';
 import { cn, formatDateTime } from '../../lib/utils';
 
 export default function IncidentList() {
   const [machine, setMachine] = useState('');
   const { data: incidents = [], isLoading, error, refetch } = useIncidents(machine || null);
+  const { status } = useLiveStatus();
 
   return (
     <Card>
@@ -23,9 +25,11 @@ export default function IncidentList() {
         description={`${incidents.length} incident${incidents.length === 1 ? '' : 's'} on record`}
         action={
           <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-2 text-xs font-semibold text-ok sm:flex">
-              <LiveDot /> Live
-            </span>
+            {status === 'open' && (
+              <span className="hidden items-center gap-2 text-xs font-semibold text-ok sm:flex">
+                <LiveDot /> Live
+              </span>
+            )}
             <Select
               aria-label="Filter by machine"
               value={machine}

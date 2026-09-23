@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import { Activity, ArrowLeftRight, Calculator, ClipboardList, FileWarning, GraduationCap, ShieldAlert } from 'lucide-react';
 import { ApiOfflineBanner, ApiStatusPill } from '../components/ApiStatus';
 import Brand from '../components/Brand';
+import LiveAlertToaster from '../components/LiveAlertToaster';
 import SessionPicker from '../components/SessionPicker';
 import { cn } from '../lib/utils';
 
@@ -50,6 +51,7 @@ export default function CommandLayout() {
   const location = useLocation();
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+      <LiveAlertToaster />
       <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface/60 p-4 lg:flex">
         <Brand subtitle="Command Center" />
         <nav className="mt-8 flex flex-col gap-1" aria-label="Command Center">
@@ -89,7 +91,8 @@ export default function CommandLayout() {
           </nav>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        {/* Motion layout animations briefly scale rows when the width changes (e.g. a scrollbar appears); clip that overshoot. */}
+        <main className="mx-auto max-w-7xl overflow-x-clip px-4 py-8 sm:px-6">
           <ApiOfflineBanner />
           <motion.div key={location.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
             <Outlet />

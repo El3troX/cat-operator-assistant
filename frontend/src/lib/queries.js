@@ -1,8 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from './api';
+import { useLiveStatus } from './live';
 
-const LIVE_POLL_MS = 5000;
+// Fallback only: while the /ws/events socket is open, pushed events refresh these queries.
+const FALLBACK_POLL_MS = 5000;
+
+function usePollWhenOffline() {
+  const { status } = useLiveStatus();
+  return status === 'open' ? false : FALLBACK_POLL_MS;
+}
 
 export const keys = {
   health: ['health'],
@@ -43,7 +50,7 @@ export function useAlerts(machineId) {
   return useQuery({
     queryKey: keys.alerts(machineId),
     queryFn: () => api.alerts(machineId),
-    refetchInterval: LIVE_POLL_MS,
+    refetchInterval: usePollWhenOffline(),
   });
 }
 
@@ -71,7 +78,7 @@ export function useIncidents(machineId) {
   return useQuery({
     queryKey: keys.incidents(machineId),
     queryFn: () => api.incidents(machineId),
-    refetchInterval: LIVE_POLL_MS,
+    refetchInterval: usePollWhenOffline(),
   });
 }
 

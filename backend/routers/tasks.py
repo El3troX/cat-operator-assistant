@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from schemas import TaskPatchRequest, TaskResponse
+from services.events import publish_event
 
 router = APIRouter(tags=["Dashboard"])
 logger = logging.getLogger(__name__)
@@ -30,4 +31,6 @@ def patch_task(task_id: int, payload: TaskPatchRequest, db: Session = Depends(ge
     db.commit()
     db.refresh(task)
     logger.info("Task %s updated: %s", task_id, payload.model_dump(exclude_unset=True))
-    return task
+    response = TaskResponse.model_validate(task)
+    publish_event("task.updated", response)
+    return response

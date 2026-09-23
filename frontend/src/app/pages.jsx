@@ -2,6 +2,8 @@ import { PageHeader } from '../components/ui/page-header';
 import TaskTimeEstimator from '../features/estimator/TaskTimeEstimator';
 import IncidentForm from '../features/incidents/IncidentForm';
 import IncidentList from '../features/incidents/IncidentList';
+import FleetLiveTable from '../features/live/FleetLiveTable';
+import MachineLiveCard from '../features/live/MachineLiveCard';
 import AlertFeed from '../features/safety/AlertFeed';
 import ProximityRadar from '../features/safety/ProximityRadar';
 import SafetyCheck from '../features/safety/SafetyCheck';
@@ -11,6 +13,9 @@ export function SafetyPage() {
   return (
     <>
       <PageHeader title="Safety" description="Proximity hazards, seatbelt compliance and idling, checked live against the rule engine." />
+      <div className="mb-4">
+        <FleetLiveTable />
+      </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <ProximityRadar />
         <SafetyCheck />
@@ -55,6 +60,7 @@ export function EstimatorPage() {
 export function CabSafetyPage() {
   return (
     <div className="space-y-4">
+      <MachineLiveCard />
       <ProximityRadar size="lg" />
       <SafetyCheck size="lg" />
     </div>

@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Radar, ShieldAlert, Siren, Timer, UserRound } from 'lucide-react';
-import { toast } from 'sonner';
 import { Badge, SeverityBadge } from '../../components/ui/badge';
 import { SEVERITY_META } from '../../lib/severity';
 import { Card, CardBody, CardHeader } from '../../components/ui/card';
@@ -10,9 +9,9 @@ import { LiveDot } from '../../components/ui/live-dot';
 import { Segmented } from '../../components/ui/segmented';
 import { EmptyState, ErrorState, SkeletonList } from '../../components/ui/states';
 import { MACHINES } from '../../lib/constants';
-import { isLocalAlert } from '../../lib/local-alerts';
+import { useLiveStatus } from '../../lib/live';
 import { useAlerts } from '../../lib/queries';
-import { buzz, cn, formatDateTime } from '../../lib/utils';
+import { cn, formatDateTime } from '../../lib/utils';
 
 const TYPE_ICONS = { Seatbelt: ShieldAlert, Proximity: Radar, Idling: Timer, Anomaly: Siren };
 const TYPES = ['All', 'Seatbelt', 'Proximity', 'Idling', 'Anomaly'];
@@ -22,22 +21,7 @@ export default function AlertFeed() {
   const [machine, setMachine] = useState('');
   const [type, setType] = useState('All');
   const { data: alerts = [], isLoading, error, refetch } = useAlerts(machine || null);
-  const newestSeen = useRef(null);
-
-  // Surface newly arrived high-severity alerts from polling as toasts.
-  useEffect(() => {
-    if (!alerts.length) return;
-    const maxId = Math.max(...alerts.map((a) => a.id));
-    if (newestSeen.current !== null) {
-      alerts
-        .filter((a) => a.id > newestSeen.current && a.severity === 'High' && !isLocalAlert(a))
-        .forEach((a) => {
-          buzz();
-          toast.error(`${a.type} alert · ${a.machine_id}`, { description: a.message });
-        });
-    }
-    newestSeen.current = Math.max(newestSeen.current ?? 0, maxId);
-  }, [alerts]);
+  const { status } = useLiveStatus();
 
   const visible = (type === 'All' ? alerts : alerts.filter((a) => a.type === type)).slice(0, MAX_VISIBLE);
 
@@ -48,9 +32,13 @@ export default function AlertFeed() {
         title="Alert feed"
         description="System-generated safety alerts, newest first."
         action={
-          <span className="flex items-center gap-2 text-xs font-semibold text-ok">
-            <LiveDot /> Live
-          </span>
+          status === 'open' ? (
+            <span className="flex items-center gap-2 text-xs font-semibold text-ok">
+              <LiveDot /> Live
+            </span>
+          ) : (
+            <span className="text-xs font-semibold text-warn">Refreshing every 5 s</span>
+          )
         }
       />
       <CardBody className="space-y-4">

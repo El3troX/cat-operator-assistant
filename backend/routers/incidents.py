@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from schemas import IncidentCreateRequest, IncidentResponse
+from services.events import publish_event
 
 router = APIRouter(tags=["Incidents"])
 logger = logging.getLogger(__name__)
@@ -19,7 +20,9 @@ def create_incident(payload: IncidentCreateRequest, db: Session = Depends(get_db
     db.commit()
     db.refresh(incident)
     logger.info("Incident %s logged on %s (%s)", incident.id, incident.machine_id, incident.severity)
-    return incident
+    response = IncidentResponse.model_validate(incident)
+    publish_event("incident.created", response)
+    return response
 
 
 @router.get("/incidents", response_model=list[IncidentResponse])

@@ -3,7 +3,10 @@ import { useRef, useState } from 'react';
 import { OctagonAlert, Radar, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardBody, CardHeader } from '../../components/ui/card';
+import { LiveDot } from '../../components/ui/live-dot';
+import { Segmented } from '../../components/ui/segmented';
 import { PROXIMITY_ALERT_M } from '../../lib/constants';
+import { useMachineTelemetry } from '../../lib/live';
 import { markLocalAlerts } from '../../lib/local-alerts';
 import { useProximity } from '../../lib/queries';
 import { useSession } from '../../lib/session';
@@ -34,6 +37,17 @@ const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 
 const BEARINGS = ['front', 'front-right', 'right', 'rear-right', 'rear', 'rear-left', 'left', 'front-left'];
 const bearingLabel = (deg) => BEARINGS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 
+const MODES = [
+  { value: 'live', label: 'Live' },
+  { value: 'test', label: 'Manual test' },
+];
+
+function toXY(distance, bearing) {
+  const r = toRadius(distance);
+  const rad = (bearing * Math.PI) / 180;
+  return { x: r * Math.sin(rad), y: -r * Math.cos(rad) };
+}
+
 function ExcavatorGlyph() {
   return (
     <g aria-hidden>
@@ -46,20 +60,44 @@ function ExcavatorGlyph() {
   );
 }
 
+// Live frames arrive every ~2 s, so glide between them; a dragged blip must track the pointer tightly.
+const LIVE_SPRING = { type: 'spring', stiffness: 120, damping: 20 };
+const DRAG_SPRING = { type: 'spring', stiffness: 600, damping: 40 };
+
+function Blip({ blip, nearest, live }) {
+  const { x, y } = toXY(blip.distance, blip.bearing);
+  const color = zoneFor(blip.distance).color;
+  return (
+    <>
+      {nearest && <line x1={0} y1={0} x2={x} y2={y} stroke={color} strokeOpacity={0.35} strokeDasharray="2 4" />}
+      <motion.g initial={false} animate={{ x, y }} transition={live ? LIVE_SPRING : DRAG_SPRING}>
+        {nearest && (
+          <motion.circle r={14} fill={color} fillOpacity={0.18} animate={{ scale: [1, 1.35, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
+        )}
+        <circle r={nearest ? 7 : 5} fill={color} fillOpacity={nearest ? 1 : 0.7} stroke="var(--color-canvas)" strokeWidth={2} />
+      </motion.g>
+    </>
+  );
+}
+
 export default function ProximityRadar({ size = 'md' }) {
   const { machineId } = useSession();
+  const liveReading = useMachineTelemetry(machineId);
   const proximity = useProximity();
   const svgRef = useRef(null);
   const dragging = useRef(false);
+  const [mode, setMode] = useState('live');
   const [distance, setDistance] = useState(8);
   const [bearing, setBearing] = useState(-40);
   const [result, setResult] = useState(null);
 
-  const zone = zoneFor(distance);
-  const inDanger = distance <= PROXIMITY_ALERT_M;
-  const r = toRadius(distance);
-  const rad = (bearing * Math.PI) / 180;
-  const blip = { x: r * Math.sin(rad), y: -r * Math.cos(rad) };
+  const live = mode === 'live' && liveReading;
+  const blips = live
+    ? liveReading.workers.map((w) => ({ id: w.id, distance: w.distance_m, bearing: w.bearing_deg }))
+    : [{ id: 'manual', distance, bearing }];
+  const nearest = blips.reduce((a, b) => (b.distance < a.distance ? b : a));
+  const zone = zoneFor(nearest.distance);
+  const inDanger = nearest.distance <= PROXIMITY_ALERT_M;
 
   const send = (d = distance) => {
     const timestamp = nowLocalIso();
@@ -80,46 +118,58 @@ export default function ProximityRadar({ size = 'md' }) {
     );
   };
 
+  const pointerToPolar = (e) => {
+    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svgRef.current.getScreenCTM().inverse());
+    return { d: Math.max(0.3, fromRadius(Math.hypot(pt.x, pt.y))), b: (Math.atan2(pt.x, -pt.y) * 180) / Math.PI };
+  };
   const updateFromPointer = (e) => {
-    const svg = svgRef.current;
-    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
-    const radius = Math.hypot(pt.x, pt.y);
-    setDistance(Math.max(0.3, fromRadius(radius)));
-    setBearing((Math.atan2(pt.x, -pt.y) * 180) / Math.PI);
+    const { d, b } = pointerToPolar(e);
+    setDistance(d);
+    setBearing(b);
   };
-
-  const onPointerDown = (e) => {
-    dragging.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    updateFromPointer(e);
-  };
-  const onPointerMove = (e) => dragging.current && updateFromPointer(e);
-  const onPointerUp = (e) => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    const svg = svgRef.current;
-    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
-    send(Math.max(0.3, fromRadius(Math.hypot(pt.x, pt.y))));
-  };
+  const pointerHandlers = live
+    ? {}
+    : {
+        onPointerDown: (e) => {
+          dragging.current = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          updateFromPointer(e);
+        },
+        onPointerMove: (e) => dragging.current && updateFromPointer(e),
+        onPointerUp: (e) => {
+          if (!dragging.current) return;
+          dragging.current = false;
+          send(pointerToPolar(e).d);
+        },
+        onPointerCancel: () => (dragging.current = false),
+      };
 
   return (
     <Card className={cn(inDanger && 'border-danger/60 shadow-[0_0_40px_-12px_var(--color-danger)]', 'transition-[border-color,box-shadow] duration-300')}>
       <CardHeader
         icon={Radar}
         title="Proximity radar"
-        description="Drag the worker around the machine. Readings post to the safety engine on release."
+        description={
+          live
+            ? `Ground workers around ${machineId}, streamed live. Entering the 2 m zone raises an alert automatically.`
+            : 'Drag the worker around the machine. Readings post to the safety engine on release.'
+        }
+        action={
+          liveReading ? (
+            <Segmented label="Radar mode" value={mode} onChange={setMode} options={MODES} />
+          ) : (
+            <span className="text-xs font-semibold text-warn">Live feed offline</span>
+          )
+        }
       />
       <CardBody className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
         <svg
           ref={svgRef}
           viewBox="-160 -160 320 320"
-          className={cn('mx-auto w-full touch-none select-none cursor-crosshair', size === 'lg' ? 'max-w-[440px]' : 'max-w-[360px]')}
+          className={cn('mx-auto w-full touch-none select-none', !live && 'cursor-crosshair', size === 'lg' ? 'max-w-[440px]' : 'max-w-[360px]')}
           role="img"
-          aria-label={`Worker ${distance.toFixed(1)} metres ${bearingLabel(bearing)} of ${machineId}, zone ${zone.label}`}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={() => (dragging.current = false)}
+          aria-label={`Nearest person ${nearest.distance.toFixed(1)} metres ${bearingLabel(nearest.bearing)} of ${machineId}, zone ${zone.label}`}
+          {...pointerHandlers}
         >
           <defs>
             <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
@@ -170,67 +220,67 @@ export default function ProximityRadar({ size = 'md' }) {
 
           <ExcavatorGlyph />
 
-          <line x1={0} y1={0} x2={blip.x} y2={blip.y} stroke={zone.color} strokeOpacity={0.35} strokeDasharray="2 4" />
-          <motion.g animate={{ x: blip.x, y: blip.y }} transition={{ type: 'spring', stiffness: 600, damping: 40 }}>
-            <motion.circle
-              r={14}
-              fill={zone.color}
-              fillOpacity={0.18}
-              animate={{ scale: [1, 1.35, 1] }}
-              transition={{ duration: 1.4, repeat: Infinity }}
-            />
-            <circle r={7} fill={zone.color} stroke="var(--color-canvas)" strokeWidth={2} />
-          </motion.g>
+          {blips.map((blip) => (
+            <Blip key={blip.id} blip={blip} nearest={blip === nearest} live={Boolean(live)} />
+          ))}
         </svg>
 
         <div className="space-y-4">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wider text-muted">Nearest person</div>
             <div className={cn('text-5xl font-extrabold tabular-nums transition-colors', zone.text)}>
-              {distance.toFixed(1)}
+              {nearest.distance.toFixed(1)}
               <span className="text-xl font-semibold text-muted"> m</span>
             </div>
             <div className={cn('mt-1 flex items-center gap-1.5 text-sm font-semibold', zone.text)}>
               {inDanger ? <OctagonAlert className="size-4" aria-hidden /> : <ShieldCheck className="size-4" aria-hidden />}
-              {zone.label} zone · {bearingLabel(bearing)}
+              {zone.label} zone · {bearingLabel(nearest.bearing)}
             </div>
           </div>
 
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Distance</span>
-            <input
-              type="range"
-              min={0.3}
-              max={MAX_M}
-              step={0.1}
-              value={distance}
-              onChange={(e) => setDistance(Number(e.target.value))}
-              onPointerUp={(e) => send(Number(e.currentTarget.value))}
-              onKeyUp={(e) => SLIDER_KEYS.has(e.key) && send(Number(e.currentTarget.value))}
-              className="mt-2 w-full accent-[var(--color-accent)]"
-            />
-          </label>
+          {live ? (
+            <p className="flex items-center gap-2 text-sm text-muted">
+              <LiveDot /> Tracking {blips.length} ground workers
+            </p>
+          ) : (
+            <>
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted">Distance</span>
+                <input
+                  type="range"
+                  min={0.3}
+                  max={MAX_M}
+                  step={0.1}
+                  value={distance}
+                  onChange={(e) => setDistance(Number(e.target.value))}
+                  onPointerUp={(e) => send(Number(e.currentTarget.value))}
+                  onKeyUp={(e) => SLIDER_KEYS.has(e.key) && send(Number(e.currentTarget.value))}
+                  className="mt-2 w-full accent-[var(--color-accent)]"
+                />
+              </label>
 
-          <AnimatePresence mode="wait">
-            {result && (
-              <motion.div
-                key={`${result.triggered}-${result.distance}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                role="status"
-                className={cn(
-                  'rounded-xl border px-3 py-2.5 text-sm',
-                  result.triggered ? 'border-danger/40 bg-danger/10 text-danger' : 'border-ok/30 bg-ok/8 text-ok',
+              <AnimatePresence mode="wait">
+                {result && (
+                  <motion.div
+                    key={`${result.triggered}-${result.distance}`}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    role="status"
+                    className={cn(
+                      'rounded-xl border px-3 py-2.5 text-sm',
+                      result.triggered ? 'border-danger/40 bg-danger/10 text-danger' : 'border-ok/30 bg-ok/8 text-ok',
+                    )}
+                  >
+                    <div className="font-semibold">{result.triggered ? 'Alert logged' : 'Reading OK'}</div>
+                    <div className="text-muted">
+                      {result.message} ({result.distance.toFixed(1)} m)
+                    </div>
+                  </motion.div>
                 )}
-              >
-                <div className="font-semibold">{result.triggered ? 'Alert logged' : 'Reading OK'}</div>
-                <div className="text-muted">
-                  {result.message} ({result.distance.toFixed(1)} m)
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </AnimatePresence>
+            </>
+          )}
         </div>
       </CardBody>
     </Card>

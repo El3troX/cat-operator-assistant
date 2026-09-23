@@ -4,7 +4,9 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import { ClipboardList, FileWarning, GraduationCap, LayoutDashboard, ShieldAlert } from 'lucide-react';
 import { ApiOfflineBanner, ApiStatusPill } from '../components/ApiStatus';
 import Brand from '../components/Brand';
+import LiveAlertToaster from '../components/LiveAlertToaster';
 import SessionPicker from '../components/SessionPicker';
+import { useSession } from '../lib/session';
 import { cn } from '../lib/utils';
 
 const TABS = [
@@ -29,9 +31,11 @@ function Clock() {
 
 export default function CabLayout() {
   const location = useLocation();
+  const { machineId } = useSession();
   const currentTab = TABS.find((t) => (t.end ? location.pathname === t.to : location.pathname.startsWith(t.to))) ?? TABS[0];
   return (
     <div className="min-h-screen pb-28">
+      <LiveAlertToaster machineId={machineId} />
       <header className="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-4">
@@ -53,7 +57,7 @@ export default function CabLayout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6">
+      <main className="mx-auto max-w-4xl overflow-x-clip px-4 py-6">
         <h1 className="sr-only">Cab Mode: {currentTab.label}</h1>
         <ApiOfflineBanner />
         <motion.div key={location.pathname} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }}>

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from schemas import AlertResponse, ProximityRequest, ProximityResponse, SafetyCheckRequest
+from services.events import publish_event
 from services.rules import evaluate_cab_reading, evaluate_proximity
 
 router = APIRouter(tags=["Safety"])
@@ -42,6 +43,7 @@ def safety_check(payload: SafetyCheckRequest, db: Session = Depends(get_db)):
         db.commit()
         for alert in alerts:
             db.refresh(alert)
+            publish_event("alert.created", AlertResponse.model_validate(alert))
         logger.info(
             "Safety check on %s/%s raised: %s",
             payload.machine_id,
@@ -57,16 +59,17 @@ def safety_proximity(payload: ProximityRequest, db: Session = Depends(get_db)):
     if violation is None:
         return ProximityResponse(triggered=False, severity="Low", message="Safe distance maintained")
 
-    db.add(
-        models.Alert(
-            machine_id=payload.machine_id,
-            operator_id="SYSTEM",
-            type=violation.type,
-            severity=violation.severity,
-            message=violation.message,
-            timestamp=payload.timestamp,
-        )
+    alert = models.Alert(
+        machine_id=payload.machine_id,
+        operator_id="SYSTEM",
+        type=violation.type,
+        severity=violation.severity,
+        message=violation.message,
+        timestamp=payload.timestamp,
     )
+    db.add(alert)
     db.commit()
+    db.refresh(alert)
+    publish_event("alert.created", AlertResponse.model_validate(alert))
     logger.info("Proximity alert on %s: object at %.1f m", payload.machine_id, payload.distance_m)
     return ProximityResponse(triggered=True, severity=violation.severity, message=violation.message)
