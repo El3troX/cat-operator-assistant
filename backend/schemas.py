@@ -158,10 +158,21 @@ class PredictTaskTimeRequest(RequestModel):
     machine_age_yrs: int = Field(ge=0, le=60)
 
 
+class PredictionDriver(BaseModel):
+    factor: Literal["weather", "operator_skill", "machine_age_yrs"]
+    label: str
+    compared_to: str
+    minutes: int
+
+
 class PredictTaskTimeResponse(BaseModel):
     predicted_minutes: int
     # "model" = trained regressor; the other two mean the model was unavailable.
     source: PredictionSource
+    # Likely range (P10-P90) and what drives the estimate; only available from the model.
+    p10: Optional[int] = None
+    p90: Optional[int] = None
+    drivers: list[PredictionDriver] = []
 
 
 # ==========================================

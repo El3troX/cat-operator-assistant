@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader } from '../../components/ui/card';
 import { Field, Select } from '../../components/ui/form';
 import { OPERATOR_SKILLS, TASK_TYPES, WEATHERS } from '../../lib/constants';
 import { usePredictTaskTime } from '../../lib/queries';
+import { cn } from '../../lib/utils';
 
 const MACHINE_AGES = Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} yr${i ? 's' : ''}` }));
 
@@ -24,6 +25,30 @@ function SourceBadge({ source }) {
       <Icon className="size-3.5" aria-hidden />
       {meta.label}
     </Badge>
+  );
+}
+
+function Drivers({ drivers }) {
+  if (!drivers.length) {
+    return <p className="mt-4 text-sm text-ok">Best-case conditions: nothing here is adding time.</p>;
+  }
+  return (
+    <div className="mx-auto mt-5 max-w-sm text-left">
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted">What&apos;s driving it</div>
+      <ul className="mt-2 space-y-1.5">
+        {drivers.map((d) => (
+          <li key={d.factor} className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+            <span className="text-ink">
+              {d.label} <span className="text-faint">vs {d.compared_to}</span>
+            </span>
+            <span className={cn('shrink-0 font-bold tabular-nums', d.minutes > 0 ? 'text-warn' : 'text-ok')}>
+              {d.minutes > 0 ? '+' : '−'}
+              {Math.abs(d.minutes)} min
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -77,11 +102,18 @@ export default function TaskTimeEstimator() {
                 {predict.data.predicted_minutes}
                 <span className="text-2xl font-semibold text-muted"> min</span>
               </div>
+              {predict.data.p10 != null && (
+                <p className="mb-2 text-base font-semibold tabular-nums text-ink">
+                  Likely {predict.data.p10}–{predict.data.p90} min
+                  <span className="block text-xs font-normal text-faint">About 3 in 4 comparable past jobs finished in this range</span>
+                </p>
+              )}
               <p className="text-sm text-muted">
                 {predict.variables.task_type} · {predict.variables.weather} · {predict.variables.operator_skill} operator ·{' '}
                 {predict.variables.machine_age_yrs} yr machine
               </p>
               <SourceBadge source={predict.data.source} />
+              {predict.data.source === 'model' && <Drivers drivers={predict.data.drivers} />}
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-2 p-8 text-center">

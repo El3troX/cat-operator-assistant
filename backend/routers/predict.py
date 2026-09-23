@@ -10,5 +10,4 @@ router = APIRouter(tags=["Task Time Prediction"])
 
 @router.post("/predict/task-time", response_model=PredictTaskTimeResponse)
 def predict_task_time(payload: PredictTaskTimeRequest, db: Session = Depends(get_db)):
-    minutes, source = estimate_task_time(payload, db)
-    return PredictTaskTimeResponse(predicted_minutes=minutes, source=source)
+    return estimate_task_time(payload, db)

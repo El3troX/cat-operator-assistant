@@ -231,8 +231,15 @@ Request:
 ```
 Response:
 ```json
-{ "predicted_minutes": 51, "source": "model" }
+{
+  "predicted_minutes": 54, "source": "model", "p10": 48, "p90": 59,
+  "drivers": [
+    { "factor": "weather", "label": "Rainy weather", "compared_to": "sunny", "minutes": 8 },
+    { "factor": "operator_skill", "label": "Intermediate operator", "compared_to": "expert", "minutes": 4 }
+  ]
+}
 ```
+`p10`–`p90` is the likely range, from the model's out-of-fold errors on past jobs (it held about 76% of held-out actual times). Each driver is the predicted change against a best-case baseline (Sunny, Expert, 1-year-old machine); drivers under 2 minutes are omitted. Both are `null` / `[]` when `source` isn't `"model"`.
 `source` is `"model"` for the trained regressor, or `"historical"` / `"heuristic"` when the model is unavailable and the API falls back to past-job averages or rule-of-thumb multipliers.
 
 ---
@@ -317,6 +324,10 @@ everyone re-pastes the updated section into their AI tool's context before their
 next prompt — don't let sessions drift on stale shapes.
 
 ## 6. Changelog
+
+### 2026-09-23: estimate ranges
+
+- `POST /predict/task-time` adds `p10`, `p90` and `drivers` (see §3). Existing fields are unchanged.
 
 ### 2026-09-23: coaching
 

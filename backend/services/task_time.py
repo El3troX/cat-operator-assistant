@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 import models
-from schemas import PredictTaskTimeRequest
+from schemas import PredictTaskTimeRequest, PredictTaskTimeResponse
 
 # The ml package lives at the repo root, beside backend/.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -29,35 +29,42 @@ DEFAULT_TASK_MIN = 50
 
 
 def warm_up() -> None:
-    """Load the model at startup; otherwise the first prediction pays a multi-second import and load."""
+    """Load the model and its error bands at startup; otherwise the first prediction pays several seconds."""
     try:
-        from ml.predict import get_model
+        from ml.predict import get_model, get_residual_band
 
         get_model()
-        logger.info("Task-time model loaded")
+        low, high = get_residual_band()
+        logger.info("Task-time model loaded (likely range %+.1f to %+.1f min around each estimate)", low, high)
     except Exception as exc:
         logger.warning("Task-time model unavailable, predictions will use fallback estimates: %s", exc)
 
 
-def estimate_task_time(req: PredictTaskTimeRequest, db: Session) -> tuple[int, str]:
-    """Predicted minutes plus which method produced them: "model", "historical" or "heuristic"."""
+def estimate_task_time(req: PredictTaskTimeRequest, db: Session) -> PredictTaskTimeResponse:
+    """Prediction with the method that produced it: "model", "historical" or "heuristic"."""
     try:
-        from ml.predict import predict
+        from ml.predict import explain
 
-        minutes = predict(
+        result = explain(
             task_type=req.task_type,
             weather=req.weather,
             operator_skill=req.operator_skill,
             machine_age_yrs=req.machine_age_yrs,
         )
-        return round(minutes), "model"
+        return PredictTaskTimeResponse(
+            predicted_minutes=round(result["minutes"]),
+            source="model",
+            p10=round(result["p10"]),
+            p90=round(result["p90"]),
+            drivers=result["drivers"],
+        )
     except Exception as exc:
         logger.warning("Task-time model unavailable, using fallback estimate: %s", exc)
 
     historical = _historical_estimate(req, db)
     if historical is not None:
-        return round(historical), "historical"
-    return round(_heuristic_estimate(req, db)), "heuristic"
+        return PredictTaskTimeResponse(predicted_minutes=round(historical), source="historical")
+    return PredictTaskTimeResponse(predicted_minutes=round(_heuristic_estimate(req, db)), source="heuristic")
 
 
 def _recorded_minutes(row: models.TaskTimeData) -> int:
