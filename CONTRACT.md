@@ -253,6 +253,29 @@ Response: updated module object
 
 ---
 
+### Coaching
+
+**GET `/scores/operators?operator_id=OP1001`** (operator_id optional). Lowest score first.
+```json
+[
+  {
+    "operator_id": "OP1001", "score": 72, "band": "Watch", "readings": 69,
+    "factors": [
+      { "factor": "seatbelt", "penalty": 10, "detail": "Unbelted in 10% of logged readings" },
+      { "factor": "idling", "penalty": 7, "detail": "Idled over 45 min in 13% of readings" },
+      { "factor": "proximity", "penalty": 6, "detail": "2 proximity breaches in the last hour" },
+      { "factor": "incidents", "penalty": 5, "detail": "1 incident reported this shift" }
+    ],
+    "recommended_modules": [
+      { "id": 1, "title": "Safe Excavation Basics", "format": "Video", "duration_min": 12, "completed": 0, "reason": "1 incident reported this shift" }
+    ]
+  }
+]
+```
+Score = 100 − penalties. Seatbelt: 1 pt per % of the operator's logged readings unbelted (max 40). Idling: 0.5 pt per % over 45 min (max 25). Proximity: 3 per breach in the last hour (max 15). Incidents this 8-hour shift: High 10 / Medium 5 / Low 2 (max 20). Bands: `Good` ≥ 80, `Watch` 60–79, `At risk` < 60. A factor assigns its training module at 15 / 10 / 6 / 5 points respectively. `completed` is the module's global flag (§2 simplification).
+
+---
+
 ### Live (WebSocket)
 
 Browsers must connect from an allowed origin (same rule as CORS); others are refused with 403. Clients only receive; nothing needs to be sent.
@@ -294,6 +317,11 @@ everyone re-pastes the updated section into their AI tool's context before their
 next prompt — don't let sessions drift on stale shapes.
 
 ## 6. Changelog
+
+### 2026-09-23: coaching
+
+- Added **GET `/scores/operators`** (see §3 "Coaching").
+- New training module "Seatbelt & Safe Cab Entry" (Video, 4 min). The API inserts it at startup if missing, so existing databases get it without a reseed.
 
 ### 2026-09-23: live updates
 

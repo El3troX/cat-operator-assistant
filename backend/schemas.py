@@ -181,3 +181,36 @@ class TrainingModuleResponse(BaseModel):
 
 class TrainingModulePatchRequest(RequestModel):
     completed: Literal[0, 1]
+
+
+# ==========================================
+# Coaching Schemas
+# ==========================================
+
+
+class ScoreFactor(BaseModel):
+    factor: Literal["seatbelt", "idling", "proximity", "incidents"]
+    penalty: int
+    detail: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecommendedModule(BaseModel):
+    id: int
+    title: str
+    format: Optional[str] = None
+    duration_min: Optional[int] = None
+    completed: int
+    reason: str
+
+
+class OperatorScoreResponse(BaseModel):
+    operator_id: str
+    score: int
+    band: Literal["Good", "Watch", "At risk"]
+    readings: int
+    factors: list[ScoreFactor]
+    recommended_modules: list[RecommendedModule]
+
+    model_config = ConfigDict(from_attributes=True)

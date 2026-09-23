@@ -47,6 +47,8 @@ export const api = {
 
   predictTaskTime: (payload) => request('/predict/task-time', { method: 'POST', body: payload }),
 
+  scores: (operatorId) => request('/scores/operators', { params: { operator_id: operatorId } }),
+
   trainingModules: () => request('/training/modules'),
   updateTrainingModule: (id, patch) =>
     request(`/training/modules/${id}`, { method: 'PATCH', body: patch }),

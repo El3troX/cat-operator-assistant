@@ -1,4 +1,5 @@
 import { PageHeader } from '../components/ui/page-header';
+import AssignedTraining from '../features/coaching/AssignedTraining';
 import TaskTimeEstimator from '../features/estimator/TaskTimeEstimator';
 import IncidentForm from '../features/incidents/IncidentForm';
 import IncidentList from '../features/incidents/IncidentList';
@@ -54,6 +55,15 @@ export function EstimatorPage() {
       <PageHeader title="Task time estimator" description="Predict how long a job will take from task type, weather, operator skill and machine age." />
       <TaskTimeEstimator />
     </>
+  );
+}
+
+export function CabTrainingPage() {
+  return (
+    <div className="space-y-6">
+      <AssignedTraining />
+      <TrainingHub size="lg" />
+    </div>
   );
 }
 

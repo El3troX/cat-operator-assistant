@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Activity, ArrowLeftRight, Calculator, ClipboardList, FileWarning, GraduationCap, ShieldAlert } from 'lucide-react';
+import { Activity, ArrowLeftRight, Calculator, ClipboardList, FileWarning, Gauge, GraduationCap, ShieldAlert } from 'lucide-react';
 import { ApiOfflineBanner, ApiStatusPill } from '../components/ApiStatus';
 import Brand from '../components/Brand';
 import LiveAlertToaster from '../components/LiveAlertToaster';
@@ -12,6 +12,7 @@ const NAV = [
   { to: '/command/safety', label: 'Safety', icon: ShieldAlert },
   { to: '/command/incidents', label: 'Incidents', icon: FileWarning },
   { to: '/command/anomalies', label: 'Unusual behaviour', icon: Activity },
+  { to: '/command/coaching', label: 'Coaching', icon: Gauge },
   { to: '/command/training', label: 'Training hub', icon: GraduationCap },
   { to: '/command/estimator', label: 'Time estimator', icon: Calculator },
 ];

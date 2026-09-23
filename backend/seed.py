@@ -283,6 +283,12 @@ def seed_database(reset: bool = True):
                 duration_min=45,
                 completed=1,
             ),
+            TrainingModule(
+                title="Seatbelt & Safe Cab Entry",
+                format="Video",
+                duration_min=4,
+                completed=0,
+            ),
         ]
         db.add_all(training_modules)
         db.commit()

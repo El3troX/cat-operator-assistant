@@ -2,14 +2,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { connectLive, LiveStatusContext, TelemetryContext } from '../lib/live';
 
+// Scores depend on alerts, incidents and training completion, so those events refresh them too.
 const INVALIDATES = {
-  'alert.created': ['alerts'],
-  'incident.created': ['incidents'],
+  'alert.created': ['alerts', 'scores'],
+  'incident.created': ['incidents', 'scores'],
   'task.updated': ['tasks'],
-  'training.updated': ['training'],
+  'training.updated': ['training', 'scores'],
 };
 // Refreshed on every (re)connect: events may have been missed, and an open socket proves the API is back.
-const LIVE_QUERY_ROOTS = ['alerts', 'incidents', 'tasks', 'training', 'health'];
+const LIVE_QUERY_ROOTS = ['alerts', 'incidents', 'tasks', 'training', 'scores', 'health'];
 
 export default function LiveProvider({ children }) {
   const queryClient = useQueryClient();
@@ -20,8 +21,7 @@ export default function LiveProvider({ children }) {
   useEffect(() => {
     const closeEvents = connectLive('/ws/events', {
       onMessage: (event) => {
-        const root = INVALIDATES[event.type];
-        if (root) queryClient.invalidateQueries({ queryKey: root });
+        (INVALIDATES[event.type] ?? []).forEach((root) => queryClient.invalidateQueries({ queryKey: [root] }));
         listeners.current.forEach((listener) => listener(event));
       },
       onStatus: (next) => {

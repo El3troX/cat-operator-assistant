@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, SkeletonList } from '../../components/ui/states
 import { useSession } from '../../lib/session';
 import { useTasks, useUpdateTask } from '../../lib/queries';
 import { formatTime } from '../../lib/utils';
+import CabScoreCard from '../coaching/CabScoreCard';
 import StatusBadge from './StatusBadge';
 
 function NextUp({ task, onStart, onComplete, busy }) {
@@ -77,6 +78,7 @@ export default function CabTasks() {
 
   return (
     <div className="space-y-6">
+      <CabScoreCard />
       <AnimatePresence mode="wait">
         {next ? (
           <NextUp

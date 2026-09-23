@@ -18,7 +18,16 @@ export const keys = {
   incidents: (machineId) => ['incidents', machineId ?? 'all'],
   anomalies: (machineId) => ['anomalies', machineId ?? 'all'],
   training: ['training'],
+  scores: (operatorId) => ['scores', operatorId ?? 'all'],
 };
+
+export function useScores(operatorId) {
+  return useQuery({
+    queryKey: keys.scores(operatorId),
+    queryFn: () => api.scores(operatorId),
+    refetchInterval: usePollWhenOffline(),
+  });
+}
 
 export function useHealth() {
   return useQuery({ queryKey: keys.health, queryFn: api.health, refetchInterval: 10000, retry: false });

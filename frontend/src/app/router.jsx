@@ -1,12 +1,12 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import AnomalyPanel from '../features/anomalies/AnomalyPanel';
+import CoachingBoard from '../features/coaching/CoachingBoard';
 import IncidentForm from '../features/incidents/IncidentForm';
 import CabTasks from '../features/tasks/CabTasks';
 import TaskBoard from '../features/tasks/TaskBoard';
-import TrainingHub from '../features/training/TrainingHub';
 import CabLayout from '../layouts/CabLayout';
 import CommandLayout from '../layouts/CommandLayout';
-import { CabSafetyPage, EstimatorPage, IncidentsPage, SafetyPage, TrainingPage } from './pages';
+import { CabSafetyPage, CabTrainingPage, EstimatorPage, IncidentsPage, SafetyPage, TrainingPage } from './pages';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/command" replace /> },
@@ -18,6 +18,7 @@ export const router = createBrowserRouter([
       { path: 'safety', element: <SafetyPage /> },
       { path: 'incidents', element: <IncidentsPage /> },
       { path: 'anomalies', element: <AnomalyPanel /> },
+      { path: 'coaching', element: <CoachingBoard /> },
       { path: 'training', element: <TrainingPage /> },
       { path: 'estimator', element: <EstimatorPage /> },
     ],
@@ -29,7 +30,7 @@ export const router = createBrowserRouter([
       { index: true, element: <CabTasks /> },
       { path: 'safety', element: <CabSafetyPage /> },
       { path: 'report', element: <IncidentForm size="lg" /> },
-      { path: 'training', element: <TrainingHub size="lg" /> },
+      { path: 'training', element: <CabTrainingPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/command" replace /> },
