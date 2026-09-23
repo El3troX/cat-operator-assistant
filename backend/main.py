@@ -1,5 +1,13 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
+import sys
 from typing import List, Optional
+
+# Ensure project root is in sys.path so 'ml' package is importable
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
@@ -295,7 +303,21 @@ def get_anomalies(
 
 @app.post("/predict/task-time", response_model=PredictTaskTimeResponse, tags=["Task Time Prediction"])
 def predict_task_time(payload: PredictTaskTimeRequest, db: Session = Depends(get_db)):
-    # 1. Look for matching records in task_time_data
+    # 1. Primary: Use trained RandomForest model from ml/predict.py
+    try:
+        from ml.predict import predict as ml_predict
+        predicted_mins = ml_predict(
+            task_type=payload.task_type,
+            weather=payload.weather,
+            operator_skill=payload.operator_skill,
+            machine_age_yrs=payload.machine_age_yrs,
+        )
+        return PredictTaskTimeResponse(predicted_minutes=int(round(predicted_mins)))
+    except Exception as e:
+        # Fallback to data-driven estimation if ML model cannot be loaded
+        pass
+
+    # 2. Fallback: Look for matching records in task_time_data
     exact_matches = (
         db.query(models.TaskTimeData)
         .filter(
