@@ -1,13 +1,12 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
-
 import models
 from database import get_db
+from fastapi import APIRouter, Depends, Query, status
 from schemas import IncidentCreateRequest, IncidentResponse
 from services.events import publish_event
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Incidents"])
 logger = logging.getLogger(__name__)

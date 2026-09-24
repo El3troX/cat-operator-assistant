@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
 import models
 from database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
 from schemas import TrainingModulePatchRequest, TrainingModuleResponse
 from services.events import publish_event
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Training Hub"])
 

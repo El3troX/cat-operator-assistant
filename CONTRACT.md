@@ -233,12 +233,14 @@ Response:
 ```json
 {
   "predicted_minutes": 54, "source": "model", "p10": 48, "p90": 59,
+  "model_version": "v2026.09.24",
   "drivers": [
     { "factor": "weather", "label": "Rainy weather", "compared_to": "sunny", "minutes": 8 },
     { "factor": "operator_skill", "label": "Intermediate operator", "compared_to": "expert", "minutes": 4 }
   ]
 }
 ```
+`model_version` is the active model tag from the registry (omitted when `source` isn't `"model"`).
 `p10`–`p90` is the likely range, from the model's out-of-fold errors on past jobs (it held about 76% of held-out actual times). Each driver is the predicted change against a best-case baseline (Sunny, Expert, 1-year-old machine); drivers under 2 minutes are omitted. Both are `null` / `[]` when `source` isn't `"model"`.
 `source` is `"model"` for the trained regressor, or `"historical"` / `"heuristic"` when the model is unavailable and the API falls back to past-job averages or rule-of-thumb multipliers.
 
@@ -301,7 +303,7 @@ Response:
   "actions": [{ "tool": "draft_incident", "summary": "Medium incident drafted, awaiting confirmation" }]
 }
 ```
-Claude answers with tools scoped to the request's operator and machine: tasks, task status, incident draft, time estimate, safety status, training. `source` is `"offline"` when no `ANTHROPIC_API_KEY` is configured or Claude is unreachable; a keyword parser then handles the same core commands. **Incidents are never saved by the co-pilot**: `draft_incident` is shown to the operator, and the client saves it with `POST /incidents` once they confirm. Task status changes made by the co-pilot are saved immediately and emit `task.updated`.
+Gemini answers with tools scoped to the request's operator and machine: tasks, task status, incident draft, time estimate, safety status, training. `source` is `"offline"` when no `GEMINI_API_KEY` is configured or Gemini is unreachable; a keyword parser then handles the same core commands. **Incidents are never saved by the co-pilot**: `draft_incident` is shown to the operator, and the client saves it with `POST /incidents` once they confirm. Task status changes made by the co-pilot are saved immediately and emit `task.updated`.
 
 ---
 
@@ -347,10 +349,10 @@ next prompt — don't let sessions drift on stale shapes.
 
 ## 6. Changelog
 
-### 2026-09-24: voice co-pilot
+### 2026-09-24: voice co-pilot (Gemini)
 
 - Added **POST `/copilot/chat`** (see §3 "Co-pilot").
-- New settings: `ANTHROPIC_API_KEY`, `COPILOT_MODEL` (default `claude-opus-5`), `COPILOT_EFFORT`, `COPILOT_TIMEOUT_S`. New dependency: `anthropic`.
+- Settings: `GEMINI_API_KEY`, `COPILOT_MODEL` (default `gemini-2.5-flash`), `COPILOT_TIMEOUT_S`. Dependency: `google-genai`.
 
 ### 2026-09-23: estimate ranges
 

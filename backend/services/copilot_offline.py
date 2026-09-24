@@ -2,6 +2,7 @@
 
 Covers the core cab commands only; replies are short because they are read aloud.
 """
+
 import re
 
 from services.copilot_tools import CopilotTools, ToolError
@@ -18,7 +19,13 @@ _TRAINING = re.compile(r"\b(training|score|coaching)\b")
 _TASKS = re.compile(r"\b(next|task|tasks|job|jobs|schedule)\b")
 _LEAD_IN = re.compile(r"^\s*(please\s+)?(log|report|record)( it| an? incident| incident| that)?[:,.\s-]*", re.I)
 
-_TASK_WORDS = {"excavat": "Earth Excavation", "trench": "Trenching", "load": "Material Loading", "grad": "Grading", "demoli": "Demolition"}
+_TASK_WORDS = {
+    "excavat": "Earth Excavation",
+    "trench": "Trenching",
+    "load": "Material Loading",
+    "grad": "Grading",
+    "demoli": "Demolition",
+}
 _WEATHER_WORDS = {"rain": "Rainy", "wind": "Windy", "cloud": "Cloudy", "sun": "Sunny", "clear": "Sunny"}
 
 HELP = "I can tell you your next task, log an incident, estimate a job's time, check safety around your machine, or show your training."
@@ -52,7 +59,9 @@ def respond(tools: CopilotTools, message: str) -> str:
         open_tasks = [t for t in tasks if t["status"] != "Completed"]
 
         if _ESTIMATE.search(text):
-            task_type = _first_match(text, _TASK_WORDS) or (open_tasks[0]["task_type"] if open_tasks else "Earth Excavation")
+            task_type = _first_match(text, _TASK_WORDS) or (
+                open_tasks[0]["task_type"] if open_tasks else "Earth Excavation"
+            )
             weather = _first_match(text, _WEATHER_WORDS) or "Sunny"
             estimate = tools.estimate_task_time(task_type, weather, "Intermediate", 4)
             reply = f"{task_type} in {weather.lower()} weather: about {_minutes(estimate['predicted_minutes'])}"
@@ -85,7 +94,9 @@ def respond(tools: CopilotTools, message: str) -> str:
                 return "I don't have a safety score for you yet."
             open_modules = [m["title"] for m in training["assigned_training"] if not m["completed"]]
             reply = f"Your safety score is {training['score']}, {training['band'].lower()}."
-            return reply + (f" Assigned training: {', '.join(open_modules)}." if open_modules else " No training assigned.")
+            return reply + (
+                f" Assigned training: {', '.join(open_modules)}." if open_modules else " No training assigned."
+            )
 
         if _SAFETY.search(text):
             status = tools.get_safety_status()

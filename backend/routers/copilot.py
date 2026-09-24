@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
 from database import get_db
+from fastapi import APIRouter, Depends
 from schemas import CopilotChatRequest, CopilotChatResponse
 from services.copilot import chat
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Co-pilot"])
 

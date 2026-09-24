@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
 from database import get_db
+from fastapi import APIRouter, Depends
 from schemas import PredictTaskTimeRequest, PredictTaskTimeResponse
 from services.task_time import estimate_task_time
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Task Time Prediction"])
 

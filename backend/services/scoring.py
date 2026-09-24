@@ -2,10 +2,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
+import models
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-import models
 from services.rules import IDLE_THRESHOLD_MIN
 
 # Behaviour factors use each operator's whole logged history; event factors use a recent window,
@@ -30,8 +30,12 @@ MODULE_FOR = {
 
 # Reference modules the coaching loop relies on; inserted at startup if a database predates them.
 CATALOG = [
+    {"title": "Safe Excavation Basics", "format": "Video", "duration_min": 12},
+    {"title": "Proximity Awareness & Site Safety", "format": "Simulation", "duration_min": 25},
+    {"title": "Reducing Idle Time & Fuel Conservation", "format": "Instructor", "duration_min": 45},
     {"title": "Seatbelt & Safe Cab Entry", "format": "Video", "duration_min": 4},
 ]
+
 
 
 @dataclass
@@ -72,7 +76,9 @@ def _since(window: timedelta, now: datetime) -> str:
     return (now - window).isoformat(timespec="seconds")
 
 
-def operator_scores(db: Session, operator_id: Optional[str] = None, now: Optional[datetime] = None) -> list[OperatorScore]:
+def operator_scores(
+    db: Session, operator_id: Optional[str] = None, now: Optional[datetime] = None
+) -> list[OperatorScore]:
     now = now or datetime.now()
     log = models.OperationLog
 
@@ -113,14 +119,26 @@ def operator_scores(db: Session, operator_id: Optional[str] = None, now: Optiona
         if n:
             unbelted_pct, idle_pct = 100 * unbelted / n, 100 * idle / n
             factors.append(
-                Factor("seatbelt", min(SEATBELT_MAX, round(unbelted_pct * SEATBELT_PTS_PER_PCT)), f"Unbelted in {unbelted_pct:.0f}% of logged readings")
+                Factor(
+                    "seatbelt",
+                    min(SEATBELT_MAX, round(unbelted_pct * SEATBELT_PTS_PER_PCT)),
+                    f"Unbelted in {unbelted_pct:.0f}% of logged readings",
+                )
             )
             factors.append(
-                Factor("idling", min(IDLE_MAX, round(idle_pct * IDLE_PTS_PER_PCT)), f"Idled over {IDLE_THRESHOLD_MIN} min in {idle_pct:.0f}% of readings")
+                Factor(
+                    "idling",
+                    min(IDLE_MAX, round(idle_pct * IDLE_PTS_PER_PCT)),
+                    f"Idled over {IDLE_THRESHOLD_MIN} min in {idle_pct:.0f}% of readings",
+                )
             )
         breaches = proximity.get(op, 0)
         factors.append(
-            Factor("proximity", min(PROXIMITY_MAX, breaches * PROXIMITY_PTS_EACH), f"{breaches} proximity breach{'es' if breaches != 1 else ''} in the last hour")
+            Factor(
+                "proximity",
+                min(PROXIMITY_MAX, breaches * PROXIMITY_PTS_EACH),
+                f"{breaches} proximity breach{'es' if breaches != 1 else ''} in the last hour",
+            )
         )
         by_severity = incidents.get(op, {})
         incident_count = sum(by_severity.values())

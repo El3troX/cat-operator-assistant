@@ -7,15 +7,16 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
-from sqlalchemy import inspect
-from database import Base, SessionLocal, engine
-import models
+from database import engine
 from main import app
+from migrations import apply_migrations
+from sqlalchemy import inspect
 
 
 def test_database_tables():
-    print("Testing database table creation...")
-    Base.metadata.create_all(bind=engine)
+    print("Testing database table creation & migrations...")
+    apply_migrations()
+
     inspector = inspect(engine)
     tables = inspector.get_table_names()
 

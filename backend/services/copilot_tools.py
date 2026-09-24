@@ -2,11 +2,11 @@ import json
 import logging
 from typing import Any, Optional
 
+import models
 from pydantic import ValidationError
+from schemas import PredictTaskTimeRequest, TaskResponse
 from sqlalchemy.orm import Session
 
-import models
-from schemas import PredictTaskTimeRequest, TaskResponse
 from services import simulator
 from services.events import publish_event
 from services.rules import PROXIMITY_ALERT_M
@@ -50,7 +50,10 @@ TOOL_DEFINITIONS = [
         ),
         "input_schema": _schema(
             {
-                "description": {"type": "string", "description": "One or two clear sentences of what happened, where, and whether anyone was hurt."},
+                "description": {
+                    "type": "string",
+                    "description": "One or two clear sentences of what happened, where, and whether anyone was hurt.",
+                },
                 "severity": {
                     "type": "string",
                     "enum": SEVERITIES,
@@ -123,7 +126,13 @@ class CopilotTools:
     # --- tools ---
 
     def get_my_tasks(self) -> dict:
-        tasks = self.db.query(models.Task).filter(models.Task.operator_id == self.operator_id).order_by(models.Task.scheduled_time).all()
+        """Get today's tasks assigned to this operator including id, task type, machine, status, scheduled time and estimate."""
+        tasks = (
+            self.db.query(models.Task)
+            .filter(models.Task.operator_id == self.operator_id)
+            .order_by(models.Task.scheduled_time)
+            .all()
+        )
         return {
             "operator_id": self.operator_id,
             "tasks": [
@@ -140,6 +149,12 @@ class CopilotTools:
         }
 
     def update_task_status(self, task_id: int, status: str) -> dict:
+        """Start or complete one of this operator's tasks. Status must be 'Pending', 'In Progress', or 'Completed'.
+
+        Args:
+            task_id: ID of the task to update.
+            status: New status ('Pending', 'In Progress', or 'Completed').
+        """
         if status not in STATUSES:
             raise ToolError(f"Status must be one of {STATUSES}")
         task = self.db.get(models.Task, task_id)
@@ -158,6 +173,12 @@ class CopilotTools:
         return {"task_id": task.id, "task_type": task.task_type, "status": task.status}
 
     def draft_incident(self, description: str, severity: str) -> dict:
+        """Prepare an incident report from what the operator described. It is NOT saved: the operator confirms it on screen.
+
+        Args:
+            description: One or two clear sentences of what happened, where, and whether anyone was hurt.
+            severity: Severity level: 'High' if injured/hazard, 'Medium' for collisions/damage, 'Low' for near misses.
+        """
         description = description.strip()
         if severity not in SEVERITIES:
             raise ToolError(f"Severity must be one of {SEVERITIES}")
@@ -169,16 +190,27 @@ class CopilotTools:
             "description": description,
             "severity": severity,
         }
-        self.actions.append({"tool": "draft_incident", "summary": f"{severity} incident drafted, awaiting confirmation"})
+        self.actions.append(
+            {"tool": "draft_incident", "summary": f"{severity} incident drafted, awaiting confirmation"}
+        )
         return {"status": "awaiting operator confirmation on screen", **self.draft}
 
     def estimate_task_time(self, task_type: str, weather: str, operator_skill: str, machine_age_yrs: int) -> dict:
+        """Predict how long a job takes, with a likely range and what drives it.
+
+        Args:
+            task_type: Type of task ('Earth Excavation', 'Trenching', 'Material Loading', 'Grading', 'Demolition').
+            weather: Weather condition ('Sunny', 'Rainy', 'Cloudy', 'Windy').
+            operator_skill: Skill level of operator ('Beginner', 'Intermediate', 'Expert').
+            machine_age_yrs: Machine age in years.
+        """
         request = PredictTaskTimeRequest(
             task_type=task_type, weather=weather, operator_skill=operator_skill, machine_age_yrs=machine_age_yrs
         )
         return estimate_task_time(request, self.db).model_dump()
 
     def get_safety_status(self) -> dict:
+        """Get live readings for the operator's machine (seatbelt, idling, nearest person) and its latest alerts."""
         frame = simulator.current.latest if simulator.current else None
         reading = next((m for m in (frame or {}).get("machines", []) if m["machine_id"] == self.machine_id), None)
         alerts = (
@@ -195,11 +227,16 @@ class CopilotTools:
             "idling_time_min": reading and reading["idling_time_min"],
             "nearest_person_m": reading and reading["nearest_m"],
             "person_in_danger_zone": bool(reading and reading["nearest_m"] <= PROXIMITY_ALERT_M),
-            "recent_alerts": [{"type": a.type, "severity": a.severity, "message": a.message, "time": a.timestamp[11:16]} for a in alerts],
+            "recent_alerts": [
+                {"type": a.type, "severity": a.severity, "message": a.message, "time": a.timestamp[11:16]}
+                for a in alerts
+            ],
         }
 
     def get_my_training(self) -> dict:
+        """Get the operator's safety score, the factors behind it, and the training assigned to them."""
         scores = operator_scores(self.db, self.operator_id)
+
         if not scores:
             return {"operator_id": self.operator_id, "score": None, "assigned_training": []}
         entry = scores[0]
@@ -207,8 +244,11 @@ class CopilotTools:
             "operator_id": self.operator_id,
             "score": entry.score,
             "band": entry.band,
-            "factors": [{"factor": f.factor, "penalty": f.penalty, "detail": f.detail} for f in entry.factors if f.penalty],
+            "factors": [
+                {"factor": f.factor, "penalty": f.penalty, "detail": f.detail} for f in entry.factors if f.penalty
+            ],
             "assigned_training": [
-                {"title": m["title"], "reason": m["reason"], "completed": bool(m["completed"])} for m in entry.recommended_modules
+                {"title": m["title"], "reason": m["reason"], "completed": bool(m["completed"])}
+                for m in entry.recommended_modules
             ],
         }

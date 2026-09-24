@@ -12,7 +12,12 @@ BACKEND_DIR = Path(__file__).resolve().parent
 class Settings(BaseSettings):
     """Runtime configuration, read from environment variables or backend/.env."""
 
-    model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(BACKEND_DIR / ".env", Path(".env")),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
 
     database_url: str = f"sqlite:///{(BACKEND_DIR / 'cat_assistant.db').as_posix()}"
 
@@ -29,10 +34,9 @@ class Settings(BaseSettings):
     sim_interval_s: float = Field(default=2.0, gt=0)
     sim_seed: int = 7
 
-    # Voice co-pilot. Without a key the co-pilot runs its offline command parser.
-    anthropic_api_key: SecretStr = SecretStr("")
-    copilot_model: str = "claude-opus-5"
-    copilot_effort: Literal["low", "medium", "high"] = "low"
+    # Voice co-pilot (Gemini). Without a key the co-pilot runs its offline command parser.
+    gemini_api_key: SecretStr = SecretStr("")
+    copilot_model: str = "gemini-2.5-flash"
     copilot_timeout_s: float = Field(default=20.0, gt=0)
 
     @field_validator("log_level", mode="before")

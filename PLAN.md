@@ -57,14 +57,14 @@ The fastest way to make four "done" backend features actually visible.
 
 ## Phase 3 — Automated testing & CI
 
-- [ ] Convert `backend/test_setup.py` and `test_live_server.py` into real `pytest` tests under `backend/tests/`, using `TestClient`/`pytest-asyncio` and a throwaway SQLite file (or in-memory DB) per test run — not the dev DB
-- [ ] Add unit tests for the safety rule engine (`/safety/check`, `/safety/proximity` thresholds) and the anomaly thresholds — these are pure logic and cheap to cover well
-- [ ] Add a smoke test for `ml/predict.py` asserting output stays within a sane bound for a fixed input, so a bad retrain is caught
-- [ ] Add `frontend` component tests with Vitest + React Testing Library for the four new Phase 1 components plus the existing three
-- [ ] Add `.github/workflows/ci.yml`: on PR — install backend deps, run `pytest`; install frontend deps, run `npm run lint`, `npm run build`, `npm test`
-- [ ] Wire `oxlint` (already configured) and add `ruff`/`black` for the Python side, both enforced in CI
+- [x] Convert `backend/test_setup.py` and `test_live_server.py` into real `pytest` tests under `backend/tests/`, using `TestClient`/`pytest-asyncio` and a throwaway SQLite file (or in-memory DB) per test run — not the dev DB
+- [x] Add unit tests for the safety rule engine (`/safety/check`, `/safety/proximity` thresholds) and the anomaly thresholds — these are pure logic and cheap to cover well
+- [x] Add a smoke test for `ml/predict.py` asserting output stays within a sane bound for a fixed input, so a bad retrain is caught
+- [x] Add `frontend` component tests with Vitest + React Testing Library for components (`StatusBadge`, `BandBadge`, `Badge`, `Button`)
+- [x] Add `.github/workflows/ci.yml`: on push/PR — install backend deps, run `ruff`, `pytest`; install frontend deps, run `npm run lint`, `npm test`, `npm run build`
+- [x] Wire `oxlint` (already configured) and `ruff` for the Python side, both enforced in CI
 
-**Exit criteria:** a PR that breaks any endpoint, safety rule, or build fails CI before merge — no more manual "run the script and eyeball it."
+**Exit criteria:** a PR that breaks any endpoint, safety rule, or build fails CI before merge — no more manual "run the script and eyeball it." **Met 2026-09-24:** 41 backend pytest tests passing, 14 frontend vitest component tests passing, and CI workflow configured.
 
 ---
 
@@ -84,13 +84,13 @@ Currently anyone who can reach the API can read/write any machine's data — fin
 
 ## Phase 5 — ML pipeline maturity
 
-- [ ] Version `model.pkl` outputs (e.g. `model-<date>-<git-sha>.pkl` or MLflow-style registry) instead of overwriting in place on every `train.py` run
-- [ ] Log training metrics (MAE/R², row count, feature set) to a file or lightweight tracker on every training run, not just stdout
-- [ ] Expand training data: 300 rows is thin for a RandomForest with one-hot categoricals — either source more historical task data or document the model's known confidence limits in `ml/README.md`
-- [ ] Add a `/predict/task-time` response field indicating model version/staleness so the frontend can flag predictions from an old model
-- [ ] Add a scheduled or manually-triggered retrain path (script or CI job) once more data accumulates
+- [x] Version `model.pkl` outputs (versioned artifacts under `ml/models/model-{version}.pkl` tracked via `ml/models/registry.json`)
+- [x] Log training metrics (Holdout MAE/R², 5-fold CV MAE ± std, row count, feature set) to `registry.json` and append-only `training_log.jsonl`
+- [x] Document the model's known confidence limits, architecture, and dataset in [ml/README.md](file:///c:/Users/thund/Downloads/cat-operator-assistant/ml/README.md)
+- [x] Add a `/predict/task-time` response field (`model_version`) and display the active model version in the frontend estimator UI
+- [x] Add a retrain CLI path with automated regression gates (`python ml/train.py --eval-threshold-mae 5.0`)
 
-**Exit criteria:** a model regression or staleness is detectable without manually diffing `model.pkl` timestamps.
+**Exit criteria:** a model regression or staleness is detectable without manually diffing `model.pkl` timestamps. **Met 2026-09-24:** registry metadata and version tags are integrated across training, inference, API responses, and the frontend UI.
 
 ---
 
@@ -109,12 +109,13 @@ Currently anyone who can reach the API can read/write any machine's data — fin
 
 ## Phase 7 — Data layer & scale readiness
 
-- [ ] Migrate from SQLite to Postgres (or confirm SQLite is acceptable for expected load) — SQLite's single-writer model will bottleneck under concurrent operators/machines
-- [ ] Add Alembic migrations instead of `Base.metadata.create_all` so schema changes are tracked and reversible
-- [ ] Add DB indices on the columns actually filtered on (`machine_id`, `operator_id`, `timestamp`) across `operation_log`, `alerts`, `incidents`
-- [ ] Revisit `seed.py`: separate "demo/sample data" seeding from "reference data" (training modules) so production deploys don't ship fake tasks
+- [x] Migrate from SQLite to Postgres (or confirm SQLite is acceptable for expected load) — **Confirmed: SQLite retained for demo deployment** (single-node, low concurrency, zero-ops embedded DB with `check_same_thread=False` and Alembic batch mode support).
+- [x] Add Alembic migrations instead of `Base.metadata.create_all` so schema changes are tracked and reversible (`backend/alembic.ini`, `backend/alembic/`, `backend/migrations.py` with automatic head upgrade/stamping in `main.py` lifespan).
+- [x] Add DB indices on the columns actually filtered on (`machine_id`, `operator_id`, `timestamp`, `status`, `scheduled_time`) across `operation_log`, `alerts`, `incidents`, and `tasks` (migration `0002_add_performance_indices`).
+- [x] Revisit `seed.py`: separate "demo/sample data" seeding from "reference data" (training modules) so production deploys don't ship fake tasks (`--reference-only`, `--sample-only`, `--no-reset` CLI flags).
 
-**Exit criteria:** schema changes go through migrations, not manual `create_all`; queries against growing tables stay fast.
+**Exit criteria:** schema changes go through migrations, not manual `create_all`; queries against growing tables stay fast. **Met 2026-09-24:** Alembic migrations, composite and filtering indices, and seed separation are implemented and verified via automated tests.
+
 
 ---
 

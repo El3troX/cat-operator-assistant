@@ -1,14 +1,13 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-
 import models
 from database import get_db
+from fastapi import APIRouter, Depends, Query
 from schemas import AlertResponse, ProximityRequest, ProximityResponse, SafetyCheckRequest
 from services.events import publish_event
 from services.rules import evaluate_cab_reading, evaluate_proximity
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Safety"])
 logger = logging.getLogger(__name__)

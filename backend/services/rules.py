@@ -21,7 +21,9 @@ def evaluate_cab_reading(seatbelt_status: Optional[str], idling_time_min: Option
         violations.append(Violation("Seatbelt", "High", "Seatbelt unfastened during operation"))
     if idling_time_min is not None and idling_time_min > IDLE_THRESHOLD_MIN:
         violations.append(
-            Violation("Idling", "Medium", f"Idling time {idling_time_min}min exceeds threshold ({IDLE_THRESHOLD_MIN}min)")
+            Violation(
+                "Idling", "Medium", f"Idling time {idling_time_min}min exceeds threshold ({IDLE_THRESHOLD_MIN}min)"
+            )
         )
     return violations
 

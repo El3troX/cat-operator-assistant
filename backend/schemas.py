@@ -173,6 +173,8 @@ class PredictTaskTimeResponse(BaseModel):
     p10: Optional[int] = None
     p90: Optional[int] = None
     drivers: list[PredictionDriver] = []
+    # Version tag of active model (e.g. "v2026.09.24").
+    model_version: Optional[str] = None
 
 
 # ==========================================
@@ -230,8 +232,8 @@ class CopilotAction(BaseModel):
 
 class CopilotChatResponse(BaseModel):
     reply: str
-    # "offline" means the keyword fallback answered (no API key, or Claude unreachable).
-    source: Literal["claude", "offline"]
+    # "offline" means the keyword fallback answered (no API key, or AI model unreachable).
+    source: Literal["gemini", "claude", "offline"]
     draft_incident: Optional[IncidentDraft] = None
     actions: list[CopilotAction] = []
 

@@ -1,9 +1,8 @@
+from database import engine, get_db
 from fastapi import APIRouter, Depends
+from schemas import HealthCheckResponse
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
-
-from database import engine, get_db
-from schemas import HealthCheckResponse
 
 router = APIRouter(tags=["General"])
 

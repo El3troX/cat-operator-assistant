@@ -2,9 +2,8 @@ import asyncio
 import contextlib
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, status
-
 from config import get_settings
+from fastapi import APIRouter, WebSocket, status
 from services import simulator
 from services.events import EVENTS, TELEMETRY, bus
 

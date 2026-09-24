@@ -8,6 +8,7 @@ from typing import Optional
 import models
 from database import SessionLocal
 from schemas import AlertResponse
+
 from services.events import TELEMETRY, bus, publish_event
 from services.rules import PROXIMITY_ALERT_M, evaluate_proximity
 

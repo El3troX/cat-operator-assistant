@@ -3,10 +3,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy.orm import Session
-
 import models
 from schemas import PredictTaskTimeRequest, PredictTaskTimeResponse
+from sqlalchemy.orm import Session
 
 # The ml package lives at the repo root, beside backend/.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +56,7 @@ def estimate_task_time(req: PredictTaskTimeRequest, db: Session) -> PredictTaskT
             p10=round(result["p10"]),
             p90=round(result["p90"]),
             drivers=result["drivers"],
+            model_version=result.get("model_version"),
         )
     except Exception as exc:
         logger.warning("Task-time model unavailable, using fallback estimate: %s", exc)

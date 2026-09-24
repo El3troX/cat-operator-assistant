@@ -1,12 +1,11 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
 import models
 from database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
 from schemas import TaskPatchRequest, TaskResponse
 from services.events import publish_event
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Dashboard"])
 logger = logging.getLogger(__name__)

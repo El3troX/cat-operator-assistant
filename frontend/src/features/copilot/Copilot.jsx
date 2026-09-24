@@ -137,6 +137,7 @@ export default function Copilot() {
           <div className="flex items-center gap-2">
             <Sparkles className="size-5 text-accent" aria-hidden />
             <h2 className="text-base font-bold text-ink">Co-pilot</h2>
+            {lastSource === 'gemini' && <Badge tone="ok">Gemini</Badge>}
             {lastSource === 'claude' && <Badge tone="ok">Claude</Badge>}
             {lastSource === 'offline' && (
               <Badge tone="warn" title="No AI connection: basic voice commands only">

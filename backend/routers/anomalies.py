@@ -1,12 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-
 import models
 from database import get_db
+from fastapi import APIRouter, Depends, Query
 from schemas import AnomalyResponse
 from services.rules import IDLE_THRESHOLD_MIN, summarize_log_reading
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Anomaly Detection"])
 

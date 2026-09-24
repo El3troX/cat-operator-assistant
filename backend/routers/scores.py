@@ -1,11 +1,10 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-
 from database import get_db
+from fastapi import APIRouter, Depends, Query
 from schemas import OperatorScoreResponse
 from services.scoring import operator_scores
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Coaching"])
 

@@ -3,13 +3,13 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
+from config import get_settings
+from database import SessionLocal, engine
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-
-from config import get_settings
-from database import Base, SessionLocal, engine
+from migrations import apply_migrations
 from observability import RequestContextMiddleware, configure_logging
 from routers import anomalies, copilot, incidents, live, predict, safety, scores, system, tasks, training
 from services.events import bus
@@ -24,9 +24,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    apply_migrations()
     with SessionLocal() as db:
         ensure_training_catalog(db)
+
     warm_up()
     bus.bind(asyncio.get_running_loop())
     simulator_task = (

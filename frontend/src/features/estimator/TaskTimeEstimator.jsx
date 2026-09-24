@@ -17,14 +17,21 @@ const SOURCE_META = {
   heuristic: { tone: 'warn', icon: TriangleAlert, label: 'Model offline: rule-of-thumb estimate' },
 };
 
-function SourceBadge({ source }) {
+function SourceBadge({ source, version }) {
   const meta = SOURCE_META[source] ?? SOURCE_META.heuristic;
   const Icon = meta.icon;
   return (
-    <Badge tone={meta.tone} className="mt-3">
-      <Icon className="size-3.5" aria-hidden />
-      {meta.label}
-    </Badge>
+    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+      <Badge tone={meta.tone}>
+        <Icon className="size-3.5" aria-hidden />
+        {meta.label}
+      </Badge>
+      {version && (
+        <Badge tone="neutral" title="Trained model version">
+          {version}
+        </Badge>
+      )}
+    </div>
   );
 }
 
@@ -112,7 +119,7 @@ export default function TaskTimeEstimator() {
                 {predict.variables.task_type} · {predict.variables.weather} · {predict.variables.operator_skill} operator ·{' '}
                 {predict.variables.machine_age_yrs} yr machine
               </p>
-              <SourceBadge source={predict.data.source} />
+              <SourceBadge source={predict.data.source} version={predict.data.model_version} />
               {predict.data.source === 'model' && <Drivers drivers={predict.data.drivers} />}
             </motion.div>
           ) : (

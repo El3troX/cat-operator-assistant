@@ -1,10 +1,13 @@
+import json
 from pathlib import Path
+
 import joblib
 import numpy as np
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "model.pkl"
+REGISTRY_PATH = BASE_DIR / "models" / "registry.json"
 
 RANGE_PERCENTILES = (10, 90)
 # Smaller counterfactual deltas are forest noise (e.g. an older machine "saving" a minute).
@@ -23,6 +26,28 @@ DRIVER_LABELS = {
 
 _model = None
 _residual_band = None
+_metadata = None
+
+
+def get_model_metadata() -> dict:
+    global _metadata
+    if _metadata is None:
+        if REGISTRY_PATH.exists():
+            try:
+                with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    active_ver = data.get("active_version")
+                    for m in data.get("models", []):
+                        if m.get("version") == active_ver:
+                            _metadata = m
+                            break
+                    if _metadata is None and data.get("models"):
+                        _metadata = data["models"][0]
+            except Exception:
+                pass
+        if _metadata is None:
+            _metadata = {"version": "v1.0.0", "metrics": {}}
+    return _metadata
 
 
 def get_model():
@@ -37,27 +62,28 @@ def get_model():
 
 
 def predict(task_type: str, weather: str, operator_skill: str, machine_age_yrs: int) -> float:
-    """
-    Predict actual task completion time in minutes given task parameters.
-    
+    """Predict actual task completion time in minutes given task parameters.
+
     Args:
         task_type: e.g. "Earth Excavation", "Trenching", "Material Loading", "Grading", "Demolition"
         weather: e.g. "Sunny", "Rainy", "Cloudy", "Windy"
         operator_skill: e.g. "Beginner", "Intermediate", "Expert"
         machine_age_yrs: machine age in years (integer)
-        
+
     Returns:
         predicted task time in minutes (float)
     """
     model = get_model()
-    input_df = pd.DataFrame([
-        {
-            "task_type": task_type,
-            "weather": weather,
-            "operator_skill": operator_skill,
-            "machine_age_yrs": machine_age_yrs,
-        }
-    ])
+    input_df = pd.DataFrame(
+        [
+            {
+                "task_type": task_type,
+                "weather": weather,
+                "operator_skill": operator_skill,
+                "machine_age_yrs": machine_age_yrs,
+            }
+        ]
+    )
     prediction = model.predict(input_df)[0]
     return float(prediction)
 
@@ -65,11 +91,15 @@ def predict(task_type: str, weather: str, operator_skill: str, machine_age_yrs: 
 def get_residual_band() -> tuple[float, float]:
     """P10/P90 of out-of-fold prediction errors on the training data.
 
-    The spread of the forest's individual trees covered only ~59% of held-out actual times
-    for a nominal 80% range; these residual quantiles covered ~76%.
+    Loaded directly from model registry if trained, or computed via 5-fold cross-validation.
     """
     global _residual_band
     if _residual_band is None:
+        meta = get_model_metadata()
+        if "residual_band" in meta and len(meta["residual_band"]) == 2:
+            _residual_band = (float(meta["residual_band"][0]), float(meta["residual_band"][1]))
+            return _residual_band
+
         from sklearn.model_selection import cross_val_predict
 
         from ml.train import CATEGORICAL_FEATURES, NUMERIC_FEATURES, TARGET, build_pipeline, load_dataset
@@ -82,8 +112,13 @@ def get_residual_band() -> tuple[float, float]:
 
 
 def explain(task_type: str, weather: str, operator_skill: str, machine_age_yrs: int) -> dict:
-    """Prediction with a likely range and the conditions pushing it up or down."""
-    inputs = {"task_type": task_type, "weather": weather, "operator_skill": operator_skill, "machine_age_yrs": machine_age_yrs}
+    """Prediction with a likely range, what drives it, and model version metadata."""
+    inputs = {
+        "task_type": task_type,
+        "weather": weather,
+        "operator_skill": operator_skill,
+        "machine_age_yrs": machine_age_yrs,
+    }
     rows = [inputs] + [{**inputs, feature: baseline} for feature, (baseline, _) in DRIVER_BASELINES.items()]
     predictions = get_model().predict(pd.DataFrame(rows))
     minutes = float(predictions[0])
@@ -94,14 +129,21 @@ def explain(task_type: str, weather: str, operator_skill: str, machine_age_yrs: 
         delta = round(minutes - float(counterfactual))
         if inputs[feature] != baseline and abs(delta) >= MIN_DRIVER_MINUTES:
             drivers.append(
-                {"factor": feature, "label": DRIVER_LABELS[feature].format(inputs[feature]), "compared_to": compared_to, "minutes": delta}
+                {
+                    "factor": feature,
+                    "label": DRIVER_LABELS[feature].format(inputs[feature]),
+                    "compared_to": compared_to,
+                    "minutes": delta,
+                }
             )
 
+    meta = get_model_metadata()
     return {
         "minutes": minutes,
         "p10": max(1.0, minutes + low),
         "p90": minutes + high,
         "drivers": sorted(drivers, key=lambda d: -abs(d["minutes"])),
+        "model_version": meta.get("version", "v1.0.0"),
     }
 
 
@@ -113,4 +155,11 @@ if __name__ == "__main__":
         operator_skill="Intermediate",
         machine_age_yrs=4,
     )
-    print(f"Test prediction: {sample_res:.2f} minutes")
+    exp = explain(
+        task_type="Trenching",
+        weather="Rainy",
+        operator_skill="Intermediate",
+        machine_age_yrs=4,
+    )
+    print(f"Test prediction: {sample_res:.2f} minutes, Version: {exp['model_version']}")
+
